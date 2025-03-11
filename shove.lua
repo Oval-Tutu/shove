@@ -19,36 +19,35 @@ local state = {
 }
 
 local function initValues()
-  if state.settings.scaler then
-    state.transform.scale.x = state.dimensions.window.width / state.dimensions.shove.width
-    state.transform.scale.y = state.dimensions.window.height / state.dimensions.shove.height
+  -- Calculate initial scale factors (used by most modes)
+  state.transform.scale.x = state.dimensions.window.width / state.dimensions.shove.width
+  state.transform.scale.y = state.dimensions.window.height / state.dimensions.shove.height
+  -- Default: no offset
+  state.transform.offset.x, state.transform.offset.y = 0, 0
 
-    if state.settings.scaler == "aspect" or state.settings.scaler == "pixel" then
-      local scaleVal
-
-      scaleVal = math.min(state.transform.scale.x, state.transform.scale.y)
-      if scaleVal >= 1 and state.settings.scaler == "pixel" then
-        scaleVal = math.floor(scaleVal)
-      end
-
-      state.transform.offset.x = math.floor((state.transform.scale.x - scaleVal) * (state.dimensions.shove.width / 2))
-      state.transform.offset.y = math.floor((state.transform.scale.y - scaleVal) * (state.dimensions.shove.height / 2))
-
-      -- Apply same scale to width and height
-      state.transform.scale.x, state.transform.scale.y = scaleVal, scaleVal
-    elseif state.settings.scaler == "stretch" then
-      -- If stretched, no need to apply offset
-      state.transform.offset.x, state.transform.offset.y = 0, 0
-    else
-      error("Invalid scaler setting")
+  if state.settings.scaler == "aspect" or state.settings.scaler == "pixel" then
+    local scaleVal = math.min(state.transform.scale.x, state.transform.scale.y)
+    -- Apply pixel-perfect integer scaling if needed
+    if state.settings.scaler == "pixel" then
+      -- floor to nearest integer and fallback to scale 1
+      scaleVal = math.max(math.floor(scaleVal), 1)
     end
+    -- Calculate centering offset
+    state.transform.offset.x = math.floor((state.transform.scale.x - scaleVal) * (state.dimensions.shove.width / 2))
+    state.transform.offset.y = math.floor((state.transform.scale.y - scaleVal) * (state.dimensions.shove.height / 2))
+    -- Apply same scale to width and height
+    state.transform.scale.x, state.transform.scale.y = scaleVal, scaleVal
+  elseif state.settings.scaler == "stretch" then
+    -- Stretch scaling: no offset has already been set
   else
+    -- No scaling
     state.transform.scale.x, state.transform.scale.y = 1, 1
-
-    state.transform.offset.x = math.floor((state.dimensions.window.width / state.dimensions.shove.width - 1) * (state.dimensions.shove.width / 2))
-    state.transform.offset.y = math.floor((state.dimensions.window.height / state.dimensions.shove.height - 1) * (state.dimensions.shove.height / 2))
+    -- Center the view in the window
+    state.transform.offset.x = math.floor((state.dimensions.window.width - state.dimensions.shove.width) / 2)
+    state.transform.offset.y = math.floor((state.dimensions.window.height - state.dimensions.shove.height) / 2)
   end
 
+  -- Calculate final draw dimensions
   state.dimensions.draw.width = state.dimensions.window.width - state.transform.offset.x * 2
   state.dimensions.draw.height = state.dimensions.window.height - state.transform.offset.y * 2
 end
