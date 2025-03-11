@@ -1,7 +1,7 @@
 -- Internal state variables grouped in a local table
 local state = {
   settings = {
-    scaler = "normal"
+    scaler = "aspect"
   },
   dimensions = {
     window = {width = 0, height = 0},
@@ -23,11 +23,11 @@ local function initValues()
     state.transform.scale.x = state.dimensions.window.width / state.dimensions.shove.width
     state.transform.scale.y = state.dimensions.window.height / state.dimensions.shove.height
 
-    if state.settings.scaler == "normal" or state.settings.scaler == "pixel-perfect" then
+    if state.settings.scaler == "aspect" or state.settings.scaler == "pixel" then
       local scaleVal
 
       scaleVal = math.min(state.transform.scale.x, state.transform.scale.y)
-      if scaleVal >= 1 and state.settings.scaler == "pixel-perfect" then
+      if scaleVal >= 1 and state.settings.scaler == "pixel" then
         scaleVal = math.floor(scaleVal)
       end
 
@@ -36,7 +36,7 @@ local function initValues()
 
       -- Apply same scale to width and height
       state.transform.scale.x, state.transform.scale.y = scaleVal, scaleVal
-    elseif state.settings.scaler == "stretched" then
+    elseif state.settings.scaler == "stretch" then
       -- If stretched, no need to apply offset
       state.transform.offset.x, state.transform.offset.y = 0, 0
     else
@@ -193,7 +193,7 @@ return {
     state.dimensions.shove.height = height
     state.dimensions.window.width, state.dimensions.window.height = love.graphics.getDimensions()
     state.settings = settingsTable or {}
-    state.settings.scaler = state.settings.scaler or "normal"
+    state.settings.scaler = state.settings.scaler or "aspect"
 
     initValues()
 
