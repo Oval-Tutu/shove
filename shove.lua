@@ -1,32 +1,6 @@
---[[
-push.lua v1.0
-
-The MIT License (MIT)
-
-Copyright (c) 2018 Ulysse Ramage
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
---]]
-
 local settings
 
-local pushWidth, pushHeight
+local shoveWidth, shoveHeight
 local windowWidth, windowHeight
 
 local scale = {x = 0, y = 0}
@@ -40,8 +14,8 @@ local canvasOptions
 
 local function initValues()
 	if settings.upscale then
-		scale.x = windowWidth / pushWidth
-		scale.y = windowHeight / pushHeight
+		scale.x = windowWidth / shoveWidth
+		scale.y = windowHeight / shoveHeight
 
 		if settings.upscale == "normal" or settings.upscale == "pixel-perfect" then
 			local scaleVal
@@ -49,8 +23,8 @@ local function initValues()
 			scaleVal = math.min(scale.x, scale.y)
 			if scaleVal >= 1 and settings.upscale == "pixel-perfect" then scaleVal = math.floor(scaleVal) end
 
-			offset.x = math.floor((scale.x - scaleVal) * (pushWidth / 2))
-			offset.y = math.floor((scale.y - scaleVal) * (pushHeight / 2))
+			offset.x = math.floor((scale.x - scaleVal) * (shoveWidth / 2))
+			offset.y = math.floor((scale.y - scaleVal) * (shoveHeight / 2))
 
 			scale.x, scale.y = scaleVal, scaleVal -- Apply same scale to width and height
 		elseif settings.upscale == "stretched" then -- If stretched, no need to apply offset
@@ -61,8 +35,8 @@ local function initValues()
 	else
 		scale.x, scale.y = 1, 1
 
-		offset.x = math.floor((windowWidth / pushWidth - 1) * (pushWidth / 2))
-		offset.y = math.floor((windowHeight / pushHeight - 1) * (pushHeight / 2))
+		offset.x = math.floor((windowWidth / shoveWidth - 1) * (shoveWidth / 2))
+		offset.y = math.floor((windowHeight / shoveHeight - 1) * (shoveHeight / 2))
 	end
 
 	drawWidth = windowWidth - offset.x * 2
@@ -83,7 +57,7 @@ local function setupCanvas(canvasTable)
 				name = params.name,
 				private = params.private,
 				shader = params.shader,
-				canvas = love.graphics.newCanvas(pushWidth, pushHeight),
+				canvas = love.graphics.newCanvas(shoveWidth, shoveHeight),
 				stencil = params.stencil
 			}
 		)
@@ -106,7 +80,7 @@ local function start()
 		love.graphics.setCanvas(canvasOptions)
 	else
 		love.graphics.translate(offset.x, offset.y)
-		love.graphics.setScissor(offset.x, offset.y, pushWidth * scale.x, pushHeight * scale.y)
+		love.graphics.setScissor(offset.x, offset.y, shoveWidth * scale.x, shoveHeight * scale.y)
 		love.graphics.push()
 		love.graphics.scale(scale.x, scale.y)
 	end
@@ -131,7 +105,7 @@ local function applyShaders(canvas, shaders)
 				{
 			 		name = "_tmp",
 			  		private = true,
-			  		canvas = love.graphics.newCanvas(pushWidth, pushHeight)
+			  		canvas = love.graphics.newCanvas(shoveWidth, shoveHeight)
 		   		}
 	   		)
 
@@ -207,7 +181,7 @@ end
 
 return {
 	setupScreen = function(width, height, settingsTable)
-		pushWidth, pushHeight = width, height
+		shoveWidth, shoveHeight = width, height
 		windowWidth, windowHeight = love.graphics.getDimensions()
 
 		settings = settingsTable
@@ -247,14 +221,14 @@ return {
 		x, y = x - offset.x, y - offset.y
 		normalX, normalY = x / drawWidth, y / drawHeight
 
-		x = (x >= 0 and x <= pushWidth * scale.x) and math.floor(normalX * pushWidth) or false
-		y = (y >= 0 and y <= pushHeight * scale.y) and math.floor(normalY * pushHeight) or false
+		x = (x >= 0 and x <= shoveWidth * scale.x) and math.floor(normalX * shoveWidth) or false
+		y = (y >= 0 and y <= shoveHeight * scale.y) and math.floor(normalY * shoveHeight) or false
 
 		return x, y
 	end,
 	toReal = function(x, y)
-		local realX = offset.x + (drawWidth * x) / pushWidth
-		local realY = offset.y + (drawHeight * y)/ pushHeight
+		local realX = offset.x + (drawWidth * x) / shoveWidth
+		local realY = offset.y + (drawHeight * y)/ shoveHeight
 
 		return realX, realY
 	end,
@@ -268,7 +242,7 @@ return {
 		initValues()
 	end,
 
-	getWidth = function() return pushWidth end,
-	getHeight = function() return pushHeight end,
-	getDimensions = function() return pushWidth, pushHeight end
+	getWidth = function() return shoveWidth end,
+	getHeight = function() return shoveHeight end,
+	getDimensions = function() return shoveWidth, shoveHeight end
 }
