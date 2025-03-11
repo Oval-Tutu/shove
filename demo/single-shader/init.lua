@@ -1,6 +1,4 @@
 return function()
-  love.graphics.setDefaultFilter("linear", "linear")
-
   local gameWidth, gameHeight = 1080, 720
 
   local windowWidth, windowHeight = love.window.getDesktopDimensions()
