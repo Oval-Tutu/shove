@@ -5,7 +5,7 @@ return function()
 	love.graphics.setDefaultFilter("nearest", "nearest") -- Disable blurry scaling
 
 	love.window.setMode(640, 480, {resizable = true}) -- LÖVE resolution 640x480, resizable
-	push.setupScreen(64, 64, {upscale = "pixel-perfect", canvas = true}) -- push resolution 64x64, pixel perfect scaling, drawn to a canvas
+	shove.setupScreen(64, 64, {upscale = "pixel-perfect", canvas = true}) -- shove resolution 64x64, pixel perfect scaling, drawn to a canvas
 
 	--
 
@@ -24,14 +24,14 @@ return function()
 	end
 
 	function love.draw()
-		push.start()
+		shove.start()
 			local mouseX, mouseY = love.mouse.getPosition()
-			mouseX, mouseY = push.toGame(mouseX, mouseY)
+			mouseX, mouseY = shove.toGame(mouseX, mouseY)
 			-- If false is returned, that means the mouse is outside the game screen
 
 			local abs = math.abs(time-.5)
 			local pi = math.cos(math.pi*2*time)
-			local w = push:getWidth()
+			local w = shove.getWidth()
 			--for animating basic stuff
 
 			love.graphics.draw(image, 0, 0)
@@ -51,6 +51,6 @@ return function()
 					mouseX, mouseY+1
 				)
 			end
-		push.finish()
+		shove.finish()
 	end
 end
