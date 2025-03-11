@@ -18,12 +18,10 @@ local state = {
   }
 }
 
-local function initValues()
+local function calculateTransforms()
   -- Calculate initial scale factors (used by most modes)
   state.transform.scale.x = state.dimensions.window.width / state.dimensions.shove.width
   state.transform.scale.y = state.dimensions.window.height / state.dimensions.shove.height
-  -- Default: no offset
-  state.transform.offset.x, state.transform.offset.y = 0, 0
 
   if state.settings.scaler == "aspect" or state.settings.scaler == "pixel" then
     local scaleVal = math.min(state.transform.scale.x, state.transform.scale.y)
@@ -38,7 +36,8 @@ local function initValues()
     -- Apply same scale to width and height
     state.transform.scale.x, state.transform.scale.y = scaleVal, scaleVal
   elseif state.settings.scaler == "stretch" then
-    -- Stretch scaling: no offset has already been set
+    -- Stretch scaling: no offset
+    state.transform.offset.x, state.transform.offset.y = 0, 0
   else
     -- No scaling
     state.transform.scale.x, state.transform.scale.y = 1, 1
@@ -46,7 +45,6 @@ local function initValues()
     state.transform.offset.x = math.floor((state.dimensions.window.width - state.dimensions.shove.width) / 2)
     state.transform.offset.y = math.floor((state.dimensions.window.height - state.dimensions.shove.height) / 2)
   end
-
   -- Calculate final draw dimensions
   state.dimensions.draw.width = state.dimensions.window.width - state.transform.offset.x * 2
   state.dimensions.draw.height = state.dimensions.window.height - state.transform.offset.y * 2
@@ -193,9 +191,7 @@ return {
     state.dimensions.window.width, state.dimensions.window.height = love.graphics.getDimensions()
     state.settings = settingsTable or {}
     state.settings.scaler = state.settings.scaler or "aspect"
-
-    initValues()
-
+    calculateTransforms()
     if state.settings.canvas then
       setupCanvas({ "default" })
     end
@@ -252,8 +248,7 @@ return {
   resize = function(width, height)
     state.dimensions.window.width = width
     state.dimensions.window.height = height
-
-    initValues()
+    calculateTransforms()
   end,
 
   getWidth = function()
