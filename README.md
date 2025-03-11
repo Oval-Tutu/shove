@@ -1,6 +1,6 @@
 # Shöve 📐
 Shöve is a simple resolution-handling library for [LÖVE](https://love2d.org/) that allows you to focus on making your game with a fixed resolution.
-It is forked from from the [push](https://github.com/Ulydev/push) `dev` branch, includes community contributed fixes 🩹 and additional features from the team at [Oval Tutu](https://oval-tutu.com) 🩰
+It is forked from from the [push](https://github.com/Ulydev/push) `dev` branch, includes community contributed fixes 🩹 with additional features and API changes from the team at [Oval Tutu](https://oval-tutu.com) 🩰
 
 ## Quick start
 
@@ -10,7 +10,7 @@ Under the "Draw stuff here!" comment, add some drawing functions to see Shöve i
 shove = require("shove")
 
 love.window.setMode(1920, 1080, {resizable = true}) -- Resizable 1920x1080 window
-shove.setupScreen(1920, 1080, {upscale = "normal"}) -- 1920x1080 game resolution, scaled
+shove.setupScreen(1920, 1080, {scaler = "normal"}) -- 1920x1080 game resolution, scaled
 
 -- Make sure shove follows LÖVE's resizes
 function love.resize(width, height)
@@ -33,12 +33,12 @@ Press <kbd>SPACE</kbd> to switch between them.
 
 After applying changes to LÖVE's window using `love.window.setMode()`, initialise Shöve:
 ```lua
-shove.setupScreen(shoveWidth, shoveHeight, {upscale = ..., canvas = ...})
+shove.setupScreen(shoveWidth, shoveHeight, {scaler = ..., canvas = ...})
 ```
 `shoveWidth` and `shoveHeight` represent Shöve's fixed resolution.
 
 The last argument is a table containing settings for Shöve:
-* `upscale` (string): upscale Shöve's resolution to the current window size
+* `scaler` (string): upscale Shöve's resolution to the current window size
   * `"normal"`: fit to the current window size, preserving aspect ratio
   * `"pixel-perfect"`: pixel-perfect scaling using integer scaling (for values ≥1, otherwise uses normal scaling)
   * `"stretched"`: stretch to the current window size
@@ -49,7 +49,6 @@ Hook Shöve into the `love.resize()` function so that it follows LÖVE's resizes
 function love.resize(width, height)
   shove.resize(width, height)
 end
-```
 
 Finally, apply Shöve transforms:
 ```lua

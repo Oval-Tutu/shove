@@ -1,6 +1,8 @@
 -- Internal state variables grouped in a local table
 local state = {
-  settings = {},
+  settings = {
+    scaler = "normal"
+  },
   dimensions = {
     window = {width = 0, height = 0},
     shove = {width = 0, height = 0},
@@ -17,26 +19,28 @@ local state = {
 }
 
 local function initValues()
-  if state.settings.upscale then
+  if state.settings.scaler then
     state.transform.scale.x = state.dimensions.window.width / state.dimensions.shove.width
     state.transform.scale.y = state.dimensions.window.height / state.dimensions.shove.height
 
-    if state.settings.upscale == "normal" or state.settings.upscale == "pixel-perfect" then
+    if state.settings.scaler == "normal" or state.settings.scaler == "pixel-perfect" then
       local scaleVal
 
       scaleVal = math.min(state.transform.scale.x, state.transform.scale.y)
-      if scaleVal >= 1 and state.settings.upscale == "pixel-perfect" then
+      if scaleVal >= 1 and state.settings.scaler == "pixel-perfect" then
         scaleVal = math.floor(scaleVal)
       end
 
       state.transform.offset.x = math.floor((state.transform.scale.x - scaleVal) * (state.dimensions.shove.width / 2))
       state.transform.offset.y = math.floor((state.transform.scale.y - scaleVal) * (state.dimensions.shove.height / 2))
 
-      state.transform.scale.x, state.transform.scale.y = scaleVal, scaleVal -- Apply same scale to width and height
-    elseif state.settings.upscale == "stretched" then -- If stretched, no need to apply offset
+      -- Apply same scale to width and height
+      state.transform.scale.x, state.transform.scale.y = scaleVal, scaleVal
+    elseif state.settings.scaler == "stretched" then
+      -- If stretched, no need to apply offset
       state.transform.offset.x, state.transform.offset.y = 0, 0
     else
-      error("Invalid upscale setting")
+      error("Invalid scaler setting")
     end
   else
     state.transform.scale.x, state.transform.scale.y = 1, 1
@@ -188,7 +192,8 @@ return {
     state.dimensions.shove.width = width
     state.dimensions.shove.height = height
     state.dimensions.window.width, state.dimensions.window.height = love.graphics.getDimensions()
-    state.settings = settingsTable
+    state.settings = settingsTable or {}
+    state.settings.scaler = state.settings.scaler or "normal"
 
     initValues()
 
@@ -217,7 +222,7 @@ return {
   end,
 
   updateSettings = function(settingsTable)
-    state.settings.upscale = settingsTable.upscale or state.settings.upscale
+    state.settings.scaler = settingsTable.scaler or state.settings.scaler
     state.settings.canvas = settingsTable.canvas or state.settings.canvas
   end,
 

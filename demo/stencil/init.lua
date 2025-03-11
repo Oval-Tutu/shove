@@ -7,7 +7,7 @@ return function()
   windowWidth, windowHeight = windowWidth * 0.5, windowHeight * 0.5
 
   love.window.setMode(windowWidth, windowHeight, { fullscreen = false, resizable = true })
-  shove.setupScreen(gameWidth, gameHeight, { upscale = "pixel-perfect" })
+  shove.setupScreen(gameWidth, gameHeight, { scaler = "pixel-perfect" })
 
   shove.setupCanvas({
     { name = "main_canvas" },

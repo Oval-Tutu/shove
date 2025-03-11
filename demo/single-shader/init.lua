@@ -7,7 +7,7 @@ return function()
   windowWidth, windowHeight = windowWidth * 0.5, windowHeight * 0.5
 
   love.window.setMode(windowWidth, windowHeight, { resizable = true })
-  shove.setupScreen(gameWidth, gameHeight, { upscale = "normal", canvas = true })
+  shove.setupScreen(gameWidth, gameHeight, { canvas = true })
 
   function love.load()
     time = 0
