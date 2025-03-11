@@ -12,7 +12,7 @@ local examples = {
 local example = 1
 
 for i = 1, #examples do
-	examples[i] = require("examples." .. examples[i])
+	examples[i] = require(examples[i])
 end
 
 function love.resize(w, h)

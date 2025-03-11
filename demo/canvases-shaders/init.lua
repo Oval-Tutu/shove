@@ -15,11 +15,11 @@ return function ()
   time = 0
 
   function love.load()
-    image1 = love.graphics.newImage( "examples/canvases-shaders/love1.png" )
-    image2 = love.graphics.newImage( "examples/canvases-shaders/love2.png" )
+    image1 = love.graphics.newImage( "canvases-shaders/love1.png" )
+    image2 = love.graphics.newImage( "canvases-shaders/love2.png" )
 
-    shader1 = love.graphics.newShader("examples/canvases-shaders/shader1.fs")
-    shader2 = love.graphics.newShader("examples/canvases-shaders/shader2.fs")
+    shader1 = love.graphics.newShader("canvases-shaders/shader1.fs")
+    shader2 = love.graphics.newShader("canvases-shaders/shader2.fs")
 
     shove.setupCanvas({
       { name = "shader", shader = shader1 }, --applied only to one canvas

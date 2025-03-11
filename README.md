@@ -1,6 +1,6 @@
 # Shöve 📐
 Shöve is a simple resolution-handling library for [LÖVE](https://love2d.org/) that allows you to focus on making your game with a fixed resolution.
-It is forked from from the [push](https://github.com/Ulydev/push) `dev` brach and includes community contributed fixes 🩹 and additional features from the team at [Oval Tutu](https://oval-tutu.com) 🩰
+It is forked from from the [push](https://github.com/Ulydev/push) `dev` branch, includes community contributed fixes 🩹 and additional features from the team at [Oval Tutu](https://oval-tutu.com) 🩰
 
 ## Quick start
 
@@ -24,9 +24,9 @@ function love.draw()
 end
 ```
 
-### Examples
+### Demo
 
-Run `love .` to view all the demos from the `examples` folder.
+Run `love demo/` to view all the demos.
 Press <kbd>SPACE</kbd> to switch between them.
 
 ## Usage
