@@ -1,84 +1,94 @@
-local settings
-
-local drawWidth, drawHeight
-local shoveWidth, shoveHeight
-local windowWidth, windowHeight
-
-local scale = { x = 0, y = 0 }
-local offset = { x = 0, y = 0 }
-local canvases
-local canvasOptions
+-- Internal state variables grouped in a local table
+local state = {
+  settings = {},
+  dimensions = {
+    window = {width = 0, height = 0},
+    shove = {width = 0, height = 0},
+    draw = {width = 0, height = 0}
+  },
+  transform = {
+    scale = {x = 0, y = 0},
+    offset = {x = 0, y = 0}
+  },
+  render = {
+    canvases = {},
+    canvasOptions = {}
+  }
+}
 
 local function initValues()
-  if settings.upscale then
-    scale.x = windowWidth / shoveWidth
-    scale.y = windowHeight / shoveHeight
+  if state.settings.upscale then
+    state.transform.scale.x = state.dimensions.window.width / state.dimensions.shove.width
+    state.transform.scale.y = state.dimensions.window.height / state.dimensions.shove.height
 
-    if settings.upscale == "normal" or settings.upscale == "pixel-perfect" then
+    if state.settings.upscale == "normal" or state.settings.upscale == "pixel-perfect" then
       local scaleVal
 
-      scaleVal = math.min(scale.x, scale.y)
-      if scaleVal >= 1 and settings.upscale == "pixel-perfect" then
+      scaleVal = math.min(state.transform.scale.x, state.transform.scale.y)
+      if scaleVal >= 1 and state.settings.upscale == "pixel-perfect" then
         scaleVal = math.floor(scaleVal)
       end
 
-      offset.x = math.floor((scale.x - scaleVal) * (shoveWidth / 2))
-      offset.y = math.floor((scale.y - scaleVal) * (shoveHeight / 2))
+      state.transform.offset.x = math.floor((state.transform.scale.x - scaleVal) * (state.dimensions.shove.width / 2))
+      state.transform.offset.y = math.floor((state.transform.scale.y - scaleVal) * (state.dimensions.shove.height / 2))
 
-      scale.x, scale.y = scaleVal, scaleVal -- Apply same scale to width and height
-    elseif settings.upscale == "stretched" then -- If stretched, no need to apply offset
-      offset.x, offset.y = 0, 0
+      state.transform.scale.x, state.transform.scale.y = scaleVal, scaleVal -- Apply same scale to width and height
+    elseif state.settings.upscale == "stretched" then -- If stretched, no need to apply offset
+      state.transform.offset.x, state.transform.offset.y = 0, 0
     else
       error("Invalid upscale setting")
     end
   else
-    scale.x, scale.y = 1, 1
+    state.transform.scale.x, state.transform.scale.y = 1, 1
 
-    offset.x = math.floor((windowWidth / shoveWidth - 1) * (shoveWidth / 2))
-    offset.y = math.floor((windowHeight / shoveHeight - 1) * (shoveHeight / 2))
+    state.transform.offset.x = math.floor((state.dimensions.window.width / state.dimensions.shove.width - 1) * (state.dimensions.shove.width / 2))
+    state.transform.offset.y = math.floor((state.dimensions.window.height / state.dimensions.shove.height - 1) * (state.dimensions.shove.height / 2))
   end
 
-  drawWidth = windowWidth - offset.x * 2
-  drawHeight = windowHeight - offset.y * 2
+  state.dimensions.draw.width = state.dimensions.window.width - state.transform.offset.x * 2
+  state.dimensions.draw.height = state.dimensions.window.height - state.transform.offset.y * 2
 end
 
 local function setupCanvas(canvasTable)
-  table.insert(canvasTable, { name = "_render", private = true }) -- Final render
+  -- Final render
+  table.insert(canvasTable, { name = "_render", private = true })
 
-  canvases = {}
+  state.render.canvases = {}
 
   for i = 1, #canvasTable do
     local params = canvasTable[i]
 
-    table.insert(canvases, {
+    table.insert(state.render.canvases, {
       name = params.name,
       private = params.private,
       shader = params.shader,
-      canvas = love.graphics.newCanvas(shoveWidth, shoveHeight),
+      canvas = love.graphics.newCanvas(state.dimensions.shove.width, state.dimensions.shove.height),
       stencil = params.stencil,
     })
   end
 
-  canvasOptions = { canvases[1].canvas, stencil = canvases[1].stencil }
+  state.render.canvasOptions = { state.render.canvases[1].canvas, stencil = state.render.canvases[1].stencil }
 end
 
 local function getCanvasTable(name)
-  for i = 1, #canvases do
-    if canvases[i].name == name then
-      return canvases[i]
+  for i = 1, #state.render.canvases do
+    if state.render.canvases[i].name == name then
+      return state.render.canvases[i]
     end
   end
 end
 
 local function start()
-  if settings.canvas then
+  if state.settings.canvas then
     love.graphics.push()
-    love.graphics.setCanvas(canvasOptions)
+    love.graphics.setCanvas(state.render.canvasOptions)
   else
-    love.graphics.translate(offset.x, offset.y)
-    love.graphics.setScissor(offset.x, offset.y, shoveWidth * scale.x, shoveHeight * scale.y)
+    love.graphics.translate(state.transform.offset.x, state.transform.offset.y)
+    love.graphics.setScissor(state.transform.offset.x, state.transform.offset.y,
+                            state.dimensions.shove.width * state.transform.scale.x,
+                            state.dimensions.shove.height * state.transform.scale.y)
     love.graphics.push()
-    love.graphics.scale(scale.x, scale.y)
+    love.graphics.scale(state.transform.scale.x, state.transform.scale.y)
   end
 end
 
@@ -96,10 +106,10 @@ local function applyShaders(canvas, shaders)
 
     -- Only create "_tmp" canvas if needed
     if not tmp then
-      table.insert(canvases, {
+      table.insert(state.render.canvases, {
         name = "_tmp",
         private = true,
-        canvas = love.graphics.newCanvas(shoveWidth, shoveHeight),
+        canvas = love.graphics.newCanvas(state.dimensions.shove.width, state.dimensions.shove.height),
       })
 
       tmp = getCanvasTable("_tmp")
@@ -126,7 +136,7 @@ local function applyShaders(canvas, shaders)
 end
 
 local function finish(shader)
-  if settings.canvas then
+  if state.settings.canvas then
     local render = getCanvasTable("_render")
 
     love.graphics.pop()
@@ -134,8 +144,8 @@ local function finish(shader)
     -- Draw canvas
     love.graphics.setCanvas(render.canvas)
     -- Do not draw render yet
-    for i = 1, #canvases do
-      local canvasTable = canvases[i]
+    for i = 1, #state.render.canvases do
+      local canvasTable = state.render.canvases[i]
 
       if not canvasTable.private then
         local shader = canvasTable.shader
@@ -146,20 +156,20 @@ local function finish(shader)
     love.graphics.setCanvas()
 
     -- Now draw render
-    love.graphics.translate(offset.x, offset.y)
+    love.graphics.translate(state.transform.offset.x, state.transform.offset.y)
     love.graphics.push()
-    love.graphics.scale(scale.x, scale.y)
+    love.graphics.scale(state.transform.scale.x, state.transform.scale.y)
     do
       local shader = shader or render.shader
 
       applyShaders(render.canvas, type(shader) == "table" and shader or { shader })
     end
     love.graphics.pop()
-    love.graphics.translate(-offset.x, -offset.y)
+    love.graphics.translate(-state.transform.offset.x, -state.transform.offset.y)
 
     -- Clear canvas
-    for i = 1, #canvases do
-      love.graphics.setCanvas(canvases[i].canvas)
+    for i = 1, #state.render.canvases do
+      love.graphics.setCanvas(state.render.canvases[i].canvas)
       love.graphics.clear()
     end
 
@@ -168,35 +178,36 @@ local function finish(shader)
   else
     love.graphics.pop()
     love.graphics.setScissor()
-    love.graphics.translate(-offset.x, -offset.y)
+    love.graphics.translate(-state.transform.offset.x, -state.transform.offset.y)
   end
 end
 
+-- Public API
 return {
   setupScreen = function(width, height, settingsTable)
-    shoveWidth, shoveHeight = width, height
-    windowWidth, windowHeight = love.graphics.getDimensions()
-
-    settings = settingsTable
+    state.dimensions.shove.width = width
+    state.dimensions.shove.height = height
+    state.dimensions.window.width, state.dimensions.window.height = love.graphics.getDimensions()
+    state.settings = settingsTable
 
     initValues()
 
-    if settings.canvas then
+    if state.settings.canvas then
       setupCanvas({ "default" })
     end
   end,
 
   setupCanvas = setupCanvas,
-  setCanvas = function(name)
-    local canvasTable
 
-    if not settings.canvas then
+  setCanvas = function(name)
+    if not state.settings.canvas then
       return true
     end
 
-    canvasTable = getCanvasTable(name)
+    local canvasTable = getCanvasTable(name)
     return love.graphics.setCanvas({ canvasTable.canvas, stencil = canvasTable.stencil })
   end,
+
   setShader = function(name, shader)
     if not shader then
       getCanvasTable("_render").shader = name
@@ -206,24 +217,27 @@ return {
   end,
 
   updateSettings = function(settingsTable)
-    settings.upscale = settingsTable.upscale or settings.upscale
-    settings.canvas = settingsTable.canvas or settings.canvas
+    state.settings.upscale = settingsTable.upscale or state.settings.upscale
+    state.settings.canvas = settingsTable.canvas or state.settings.canvas
   end,
 
   toGame = function(x, y)
     local normalX, normalY
 
-    x, y = x - offset.x, y - offset.y
-    normalX, normalY = x / drawWidth, y / drawHeight
+    x, y = x - state.transform.offset.x, y - state.transform.offset.y
+    normalX, normalY = x / state.dimensions.draw.width, y / state.dimensions.draw.height
 
-    x = (x >= 0 and x <= shoveWidth * scale.x) and math.floor(normalX * shoveWidth) or false
-    y = (y >= 0 and y <= shoveHeight * scale.y) and math.floor(normalY * shoveHeight) or false
+    x = (x >= 0 and x <= state.dimensions.shove.width * state.transform.scale.x) and
+        math.floor(normalX * state.dimensions.shove.width) or false
+    y = (y >= 0 and y <= state.dimensions.shove.height * state.transform.scale.y) and
+        math.floor(normalY * state.dimensions.shove.height) or false
 
     return x, y
   end,
+
   toReal = function(x, y)
-    local realX = offset.x + (drawWidth * x) / shoveWidth
-    local realY = offset.y + (drawHeight * y) / shoveHeight
+    local realX = state.transform.offset.x + (state.dimensions.draw.width * x) / state.dimensions.shove.width
+    local realY = state.transform.offset.y + (state.dimensions.draw.height * y) / state.dimensions.shove.height
 
     return realX, realY
   end,
@@ -232,18 +246,21 @@ return {
   finish = finish,
 
   resize = function(width, height)
-    windowWidth, windowHeight = width, height
+    state.dimensions.window.width = width
+    state.dimensions.window.height = height
 
     initValues()
   end,
 
   getWidth = function()
-    return shoveWidth
+    return state.dimensions.shove.width
   end,
+
   getHeight = function()
-    return shoveHeight
+    return state.dimensions.shove.height
   end,
+
   getDimensions = function()
-    return shoveWidth, shoveHeight
+    return state.dimensions.shove.width, state.dimensions.shove.height
   end,
 }
