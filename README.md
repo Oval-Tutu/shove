@@ -42,6 +42,7 @@ The last argument is a table containing settings for Shöve:
   * `"aspect"`: fit to the current window size, preserving aspect ratio
   * `"pixel"`: pixel-perfect scaling using integer scaling (for values ≥1, otherwise uses normal scaling)
   * `"stretch"`: stretch to the current window size
+  * `"none"`: no scaling
 * `canvas` (bool): use and upscale canvas set to Shöve's resolution
 
 Hook Shöve into the `love.resize()` function so that it follows LÖVE's resizes:
