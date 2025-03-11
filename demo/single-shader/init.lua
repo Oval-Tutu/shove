@@ -1,4 +1,4 @@
---[[ Multiple shaders usage ]]--
+--[[ Shader usage ]]--
 
 return function ()
 
@@ -18,18 +18,15 @@ return function ()
   time = 0
 
   function love.load()
-    image = love.graphics.newImage( "examples/multiple-shaders/love.png" )
+    image = love.graphics.newImage( "single-shader/love.png" )
 
-    shader1 = love.graphics.newShader("examples/multiple-shaders/shader1.fs")
-    shader2 = love.graphics.newShader("examples/multiple-shaders/shader2.fs")
-    shove.setShader({ shader1, shader2 })
+    shader = love.graphics.newShader("single-shader/shader.fs")
+    shove.setShader( shader )
   end
 
   function love.update(dt)
     time = (time + dt) % 1
-
-    shader1:send("shift", 4 + math.cos( time * math.pi * 2 ) * 2)
-    shader2:send("setting1", 40 + math.cos(love.timer.getTime() * 2) * 10)
+    shader:send("strength", 2 + math.cos(time * math.pi * 2) * .4)
   end
 
   function love.draw()

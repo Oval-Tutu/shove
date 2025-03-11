@@ -12,7 +12,7 @@ return function()
 	time = 0
 
 	function love.load()
-		image = love.graphics.newImage("examples/low-res/image.png")
+		image = love.graphics.newImage("low-res/image.png")
 
 		love.graphics.setNewFont(16)
 	end

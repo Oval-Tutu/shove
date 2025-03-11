@@ -22,7 +22,7 @@ return function()
   time = 0
 
   function love.load()
-    background = love.graphics.newImage("examples/low-res/image.png")
+    background = love.graphics.newImage("low-res/image.png")
 
     love.graphics.setNewFont(32)
   end
