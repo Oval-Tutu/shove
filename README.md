@@ -39,9 +39,9 @@ shove.setupScreen(shoveWidth, shoveHeight, {scaler = ..., canvas = ...})
 
 The last argument is a table containing settings for Shöve:
 * `scaler` (string): upscale Shöve's resolution to the current window size
-  * `"normal"`: fit to the current window size, preserving aspect ratio
-  * `"pixel-perfect"`: pixel-perfect scaling using integer scaling (for values ≥1, otherwise uses normal scaling)
-  * `"stretched"`: stretch to the current window size
+  * `"aspect"`: fit to the current window size, preserving aspect ratio
+  * `"pixel"`: pixel-perfect scaling using integer scaling (for values ≥1, otherwise uses normal scaling)
+  * `"stretch"`: stretch to the current window size
 * `canvas` (bool): use and upscale canvas set to Shöve's resolution
 
 Hook Shöve into the `love.resize()` function so that it follows LÖVE's resizes:
