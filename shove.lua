@@ -48,6 +48,8 @@ local function calculateTransforms()
   -- Calculate final draw dimensions
   state.dimensions.draw.width = state.dimensions.window.width - state.transform.offset.x * 2
   state.dimensions.draw.height = state.dimensions.window.height - state.transform.offset.y * 2
+  -- Set appropriate filter based on scaling mode
+  love.graphics.setDefaultFilter(state.settings.scaler == "pixel" and "nearest" or "linear")
 end
 
 local function setupCanvas(canvasTable)

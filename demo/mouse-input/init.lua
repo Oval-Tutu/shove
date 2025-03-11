@@ -1,5 +1,4 @@
 return function()
-  love.graphics.setDefaultFilter("linear", "linear")
   love.window.setMode(1280, 720, { resizable = true })
   shove.setupScreen(800, 600, { canvas = true })
 

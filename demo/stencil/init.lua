@@ -1,6 +1,4 @@
 return function()
-  love.graphics.setDefaultFilter("nearest", "nearest")
-
   local gameWidth, gameHeight = 64, 64
 
   local windowWidth, windowHeight = love.window.getDesktopDimensions()
