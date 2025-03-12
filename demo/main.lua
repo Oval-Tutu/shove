@@ -15,7 +15,14 @@ for i = 1, #examples do
   examples[i] = require(examples[i])
 end
 
-examples[example]()
+-- Start first example
+local success, err = pcall(function()
+  examples[example]()
+end)
+
+if not success then
+  print("Error loading example: " .. tostring(err))
+end
 
 function love.resize(w, h)
   shove.resize(w, h)
@@ -23,9 +30,14 @@ end
 
 function love.keypressed(key)
   if key == "space" then
+    -- Switch example
     example = (example < #examples) and example + 1 or 1
-    examples[example]()
-    love.load()
+
+    -- Initialize new example with error handling
+    local success = pcall(function()
+      examples[example]()
+      if love.load then love.load() end
+    end)
   elseif key == "f" then
     -- Activate fullscreen mode
     love.window.setMode(0, 0, { fullscreen = true, fullscreentype = "desktop" })

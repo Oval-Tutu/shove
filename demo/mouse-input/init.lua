@@ -10,7 +10,7 @@ return function()
   function love.draw()
     local shoveWidth, shoveHeight = shove.getViewportDimensions()
 
-    shove.startDraw()
+    shove.beginDraw()
       love.graphics.setColor(50, 0, 0)
       love.graphics.rectangle("fill", 0, 0, shoveWidth, shoveHeight)
 
@@ -32,6 +32,6 @@ return function()
 
       love.graphics.printf("mouse x : " .. (mouseX or "outside"), 25, 25, shoveWidth, "left")
       love.graphics.printf("mouse y : " .. (mouseY or "outside"), 25, 50, shoveWidth, "left")
-    shove.stopDraw()
+    shove.endDraw()
   end
 end
