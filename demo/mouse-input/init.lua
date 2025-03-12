@@ -1,6 +1,6 @@
 return function()
   love.window.setMode(1280, 720, { resizable = true })
-  shove.setupScreen(800, 600, { scaler_mode = "canvas" })
+  shove.initResolution(800, 600, { scaler = "none", scaler_mode = "canvas" })
 
   function love.load()
     love.mouse.setVisible(false)
@@ -10,7 +10,7 @@ return function()
   function love.draw()
     local shoveWidth, shoveHeight = shove.getDimensions()
 
-    shove.start()
+    shove.startDraw()
       love.graphics.setColor(50, 0, 0)
       love.graphics.rectangle("fill", 0, 0, shoveWidth, shoveHeight)
 
@@ -32,6 +32,6 @@ return function()
 
       love.graphics.printf("mouse x : " .. (mouseX or "outside"), 25, 25, shoveWidth, "left")
       love.graphics.printf("mouse y : " .. (mouseY or "outside"), 25, 50, shoveWidth, "left")
-    shove.finish()
+    shove.stopDraw()
   end
 end

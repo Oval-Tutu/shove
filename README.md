@@ -12,7 +12,7 @@ shove = require("shove")
 -- Resizable 1920x1080 window
 love.window.setMode(1920, 1080, {resizable = true})
 -- 1920x1080 game resolution, scaled
-shove.setupScreen(1920, 1080, {scaler = "aspect"})
+shove.initResolution(1920, 1080, {scaler = "aspect"})
 
 -- Make sure shove follows LÖVE's resizes
 function love.resize(width, height)
@@ -20,9 +20,9 @@ function love.resize(width, height)
 end
 
 function love.draw()
-  shove.start()
+  shove.startDraw()
     -- Draw stuff here!
-  shove.finish()
+  shove.stopDraw()
 end
 ```
 
@@ -35,7 +35,7 @@ Press <kbd>SPACE</kbd> to switch between them.
 
 After applying changes to LÖVE's window using `love.window.setMode()`, initialise Shöve:
 ```lua
-shove.setupScreen(shoveWidth, shoveHeight, {scaler = ..., scaler_mode = ...})
+shove.initResolution(shoveWidth, shoveHeight, {scaler = ..., scaler_mode = ...})
 ```
 `shoveWidth` and `shoveHeight` represent Shöve's fixed resolution.
 
@@ -54,13 +54,14 @@ Hook Shöve into the `love.resize()` function so that it follows LÖVE's resizes
 function love.resize(width, height)
   shove.resize(width, height)
 end
+```
 
 Finally, apply Shöve transforms:
 ```lua
 function love.draw()
-  shove.start()
+  shove.startDraw()
     -- Draw stuff here!
-  shove.finish()
+  shove.stopDraw()
 end
 ```
 
@@ -80,7 +81,7 @@ shove.setupCanvas({{name = "multiple_shaders", shader = {shader1, shader2}}})
 ```
 
 ## Advanced canvases/shaders
-Shöve provides basic canvas and shader functionality through the `scaler_mode` setting in `shove.setupScreen()` and `shove.setShader()`, but you can also create additional canvases, name them for later use and apply multiple shaders to them.
+Shöve provides basic canvas and shader functionality through the `scaler_mode` setting in `shove.initResolution()` and `shove.setShader()`, but you can also create additional canvases, name them for later use and apply multiple shaders to them.
 
 Set up custom canvases:
 ```lua
@@ -110,7 +111,7 @@ Set a post-processing shader (will apply to the whole screen):
 shove.setShader([canvasName], shader)
 ```
 You don't need to call this every frame.
-Simply call it once, and it will be stored into **Shöve** until you change it back to something else.
+Simply call it once, and it will be stored into Shöve until you change it back to something else.
 If no `canvasName` is passed, shader will apply to the final render.
 Use it at your advantage to combine shader effects.
 

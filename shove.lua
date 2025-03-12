@@ -125,7 +125,7 @@ end
 
 -- Public API
 return {
-  setupScreen = function(width, height, settingsTable)
+  initResolution = function(width, height, settingsTable)
     state.dimensions.shove.width = width
     state.dimensions.shove.height = height
     state.dimensions.window.width, state.dimensions.window.height = love.graphics.getDimensions()
@@ -179,7 +179,7 @@ return {
     return realX, realY
   end,
 
-  start = function()
+  startDraw = function()
     if state.settings.scaler_mode == "canvas" then
       love.graphics.push()
       love.graphics.setCanvas(state.render.canvasOptions)
@@ -193,7 +193,7 @@ return {
     end
   end,
 
-  finish = function(shader)
+  stopDraw = function(shader)
     if state.settings.scaler_mode == "canvas" then
       local render = getCanvasTable("_render")
 
