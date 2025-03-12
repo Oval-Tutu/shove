@@ -82,20 +82,6 @@ local function getCanvasTable(name)
   end
 end
 
-local function start()
-  if state.settings.scaler_mode == "canvas" then
-    love.graphics.push()
-    love.graphics.setCanvas(state.render.canvasOptions)
-  else
-    love.graphics.translate(state.transform.offset.x, state.transform.offset.y)
-    love.graphics.setScissor(state.transform.offset.x, state.transform.offset.y,
-                            state.dimensions.shove.width * state.transform.scale.x,
-                            state.dimensions.shove.height * state.transform.scale.y)
-    love.graphics.push()
-    love.graphics.scale(state.transform.scale.x, state.transform.scale.y)
-  end
-end
-
 local function applyShaders(canvas, shaders)
   local shader = love.graphics.getShader()
 
@@ -135,50 +121,6 @@ local function applyShaders(canvas, shaders)
   end
 
   love.graphics.setShader(shader)
-end
-
-local function finish(shader)
-  if state.settings.scaler_mode == "canvas" then
-    local render = getCanvasTable("_render")
-
-    love.graphics.pop()
-    -- Draw canvas
-    love.graphics.setCanvas(render.canvas)
-    -- Do not draw render yet
-    for i = 1, #state.render.canvases do
-      local canvasTable = state.render.canvases[i]
-
-      if not canvasTable.private then
-        local shader = canvasTable.shader
-        applyShaders(canvasTable.canvas, type(shader) == "table" and shader or { shader })
-      end
-    end
-    love.graphics.setCanvas()
-
-    -- Now draw render
-    love.graphics.translate(state.transform.offset.x, state.transform.offset.y)
-    love.graphics.push()
-    love.graphics.scale(state.transform.scale.x, state.transform.scale.y)
-    do
-      local shader = shader or render.shader
-      applyShaders(render.canvas, type(shader) == "table" and shader or { shader })
-    end
-    love.graphics.pop()
-    love.graphics.translate(-state.transform.offset.x, -state.transform.offset.y)
-
-    -- Clear canvas
-    for i = 1, #state.render.canvases do
-      love.graphics.setCanvas(state.render.canvases[i].canvas)
-      love.graphics.clear()
-    end
-
-    love.graphics.setCanvas()
-    love.graphics.setShader()
-  else
-    love.graphics.pop()
-    love.graphics.setScissor()
-    love.graphics.translate(-state.transform.offset.x, -state.transform.offset.y)
-  end
 end
 
 -- Public API
@@ -237,8 +179,63 @@ return {
     return realX, realY
   end,
 
-  start = start,
-  finish = finish,
+  start = function()
+    if state.settings.scaler_mode == "canvas" then
+      love.graphics.push()
+      love.graphics.setCanvas(state.render.canvasOptions)
+    else
+      love.graphics.translate(state.transform.offset.x, state.transform.offset.y)
+      love.graphics.setScissor(state.transform.offset.x, state.transform.offset.y,
+                              state.dimensions.shove.width * state.transform.scale.x,
+                              state.dimensions.shove.height * state.transform.scale.y)
+      love.graphics.push()
+      love.graphics.scale(state.transform.scale.x, state.transform.scale.y)
+    end
+  end,
+
+  finish = function(shader)
+    if state.settings.scaler_mode == "canvas" then
+      local render = getCanvasTable("_render")
+
+      love.graphics.pop()
+      -- Draw canvas
+      love.graphics.setCanvas(render.canvas)
+      -- Do not draw render yet
+      for i = 1, #state.render.canvases do
+        local canvasTable = state.render.canvases[i]
+
+        if not canvasTable.private then
+          local shader = canvasTable.shader
+          applyShaders(canvasTable.canvas, type(shader) == "table" and shader or { shader })
+        end
+      end
+      love.graphics.setCanvas()
+
+      -- Now draw render
+      love.graphics.translate(state.transform.offset.x, state.transform.offset.y)
+      love.graphics.push()
+      love.graphics.scale(state.transform.scale.x, state.transform.scale.y)
+      do
+        local shader = shader or render.shader
+        applyShaders(render.canvas, type(shader) == "table" and shader or { shader })
+      end
+      love.graphics.pop()
+      love.graphics.translate(-state.transform.offset.x, -state.transform.offset.y)
+
+      -- Clear canvas
+      for i = 1, #state.render.canvases do
+        love.graphics.setCanvas(state.render.canvases[i].canvas)
+        love.graphics.clear()
+      end
+
+      love.graphics.setCanvas()
+      love.graphics.setShader()
+    else
+      love.graphics.pop()
+      love.graphics.setScissor()
+      love.graphics.translate(-state.transform.offset.x, -state.transform.offset.y)
+    end
+  end,
 
   resize = function(width, height)
     state.dimensions.window.width = width
