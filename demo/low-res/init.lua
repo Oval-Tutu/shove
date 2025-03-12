@@ -2,7 +2,7 @@ return function()
   -- LÖVE resolution 640x480, resizable
   love.window.setMode(640, 480, { resizable = true })
   -- shove resolution 64x64, pixel perfect scaling, drawn to a canvas
-  shove.initResolution(64, 64, { scaler = "pixel", scaler_mode = "canvas" })
+  shove.initResolution(64, 64, { fitMethod = "pixel", renderMode = "buffer" })
 
   function love.load()
     time = 0

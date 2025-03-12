@@ -40,14 +40,14 @@ shove.initResolution(gameWidth, gameHeight, {scaler = ..., scaler_mode = ...})
 `gameWidth` and `gameHeight` represent Shöve's fixed game resolution.
 
 The last argument is a table containing settings for Shöve:
-* `scaler` (string): select Shöve's resolution scaler
+* `fitMethod` (string): select Shöve's fit method
   * `"aspect"`: preserve aspect ratio (*default*)
   * `"pixel"`: pixel-perfect scaling, applies nearest-neighbor filtering
   * `"stretch"`: stretch to the current window size
   * `"none"`: no scaling
-* `scaler_mode` (string): select scaler mode
-  * `"translate"`: uses `love.graphics.translate()` and `love.graphics.scale()` (*default*)
-  * `"canvas"`: uses `love.graphics.setCanvas()`
+* `renderMode` (string): select the rendering method
+  * `"direct"`: uses `love.graphics.translate()` and `love.graphics.scale()` (*default*)
+  * `"buffer"`: uses `love.graphics.setCanvas()`
 
 Hook Shöve into the `love.resize()` function so that it follows LÖVE's resizes:
 ```lua

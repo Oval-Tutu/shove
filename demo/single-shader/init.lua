@@ -5,7 +5,7 @@ return function()
   windowWidth, windowHeight = windowWidth * 0.5, windowHeight * 0.5
 
   love.window.setMode(windowWidth, windowHeight, { resizable = true })
-  shove.initResolution(gameWidth, gameHeight, { scaler_mode = "canvas" })
+  shove.initResolution(gameWidth, gameHeight, { renderMode = "buffer" })
 
   function love.load()
     time = 0

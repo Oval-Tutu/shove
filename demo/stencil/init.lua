@@ -5,7 +5,7 @@ return function()
   windowWidth, windowHeight = windowWidth * 0.5, windowHeight * 0.5
 
   love.window.setMode(windowWidth, windowHeight, { fullscreen = false, resizable = true })
-  shove.initResolution(gameWidth, gameHeight, { scaler = "pixel" })
+  shove.initResolution(gameWidth, gameHeight, { fitMethod = "pixel" })
 
   shove.setupCanvas({
     { name = "main_canvas" },
