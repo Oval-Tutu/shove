@@ -31,8 +31,8 @@ return function()
         local time = love.timer.getTime() * 3
         love.graphics.circle(
           "fill",
-          shove.getWidth() * 0.5 + math.cos(time) * 20,
-          shove.getHeight() * 0.5 + math.sin(time) * 20,
+          shove.getViewportWidth() * 0.5 + math.cos(time) * 20,
+          shove.getViewportHeight() * 0.5 + math.sin(time) * 20,
           10 + math.sin(time) * 2
         )
       end, "replace", 1)
@@ -48,7 +48,7 @@ return function()
 
       love.graphics.setColor(1, 1, 1)
       local mouseX, mouseY = love.mouse.getPosition()
-      mouseX, mouseY = shove.toGame(mouseX, mouseY)
+      mouseX, mouseY = shove.toViewport(mouseX, mouseY)
       --if nil is returned, that means the mouse is outside the game screen
       if mouseX and mouseY then --cursor
         love.graphics.points(

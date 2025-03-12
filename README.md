@@ -35,9 +35,9 @@ Press <kbd>SPACE</kbd> to switch between them.
 
 After applying changes to LÖVE's window using `love.window.setMode()`, initialise Shöve:
 ```lua
-shove.initResolution(shoveWidth, shoveHeight, {scaler = ..., scaler_mode = ...})
+shove.initResolution(gameWidth, gameHeight, {scaler = ..., scaler_mode = ...})
 ```
-`shoveWidth` and `shoveHeight` represent Shöve's fixed resolution.
+`gameWidth` and `gameHeight` represent Shöve's fixed game resolution.
 
 The last argument is a table containing settings for Shöve:
 * `scaler` (string): select Shöve's resolution scaler
@@ -117,17 +117,27 @@ Use it at your advantage to combine shader effects.
 
 Convert coordinates:
 ```lua
-shove.toGame(x, y) -- Convert coordinates from screen to game (useful for mouse position)
--- shove.toGame will return false for values that are outside the game, be sure to check that before using them!
+ -- Convert coordinates from screen to game viewport
+shove.toViewport(x, y)
 
-shove.toReal(x, y) -- Convert coordinates from game to screen
+ -- Convert coordinates from game viewport to screen coordinates
+shove.toScreen(x, y)
 ```
 
 Get game dimensions:
 ```lua
-shove.getWidth() -- Returns game width
+-- Returns game width
+shove.getViewportWidth()
 
-shove.getHeight() -- Returns game height
+-- Returns game height
+shove.getViewportHeight()
 
-shove.getDimensions() -- Returns shove.getWidth(), shove.getHeight()
+-- Returns shove.getGameWidth(), shove.getGameHeight()
+shove.getViewportDimensions()
+
+-- Returns the game viewport rectangle in window/screen coordinates (x, y, width, height)
+shove.getViewport()
+
+-- Returns true is if window coordinates are within the game viewport
+shove.inViewport(x, y)
 ```

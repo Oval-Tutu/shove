@@ -19,11 +19,11 @@ return function()
     shove.startDraw()
       local mouseX, mouseY = love.mouse.getPosition()
       -- If false is returned, that means the mouse is outside the game screen
-      mouseX, mouseY = shove.toGame(mouseX, mouseY)
+      mouseX, mouseY = shove.toViewport(mouseX, mouseY)
 
       local abs = math.abs(time - 0.5)
       local pi = math.cos(math.pi * 2 * time)
-      local w = shove.getWidth()
+      local w = shove.getViewportWidth()
       --for animating basic stuff
 
       love.graphics.draw(image, 0, 0)
