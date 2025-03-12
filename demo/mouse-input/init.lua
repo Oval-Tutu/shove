@@ -8,7 +8,7 @@ return function()
   end
 
   function love.draw()
-    local shoveWidth, shoveHeight = shove.getDimensions()
+    local shoveWidth, shoveHeight = shove.getViewportDimensions()
 
     shove.startDraw()
       love.graphics.setColor(50, 0, 0)
@@ -16,7 +16,7 @@ return function()
 
       local mouseX, mouseY = love.mouse.getPosition()
       -- false is returned if mouse is outside the game screen
-      mouseX, mouseY = shove.toGame(mouseX, mouseY)
+      mouseX, mouseY = shove.toViewport(mouseX, mouseY)
       -- Good practice to floor returned values when simulating screen pixels
       if mouseX then
         mouseX = math.floor(mouseX)

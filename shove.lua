@@ -5,9 +5,9 @@ local state = {
     scaler_mode = "translate"
   },
   dimensions = {
-    window = {width = 0, height = 0},
-    shove = {width = 0, height = 0},
-    draw = {width = 0, height = 0}
+    screen = {width = 0, height = 0},
+    viewport = {width = 0, height = 0},
+    rendered = {width = 0, height = 0}
   },
   transform = {
     scale = {x = 0, y = 0},
@@ -21,8 +21,8 @@ local state = {
 
 local function calculateTransforms()
   -- Calculate initial scale factors (used by most modes)
-  state.transform.scale.x = state.dimensions.window.width / state.dimensions.shove.width
-  state.transform.scale.y = state.dimensions.window.height / state.dimensions.shove.height
+  state.transform.scale.x = state.dimensions.screen.width / state.dimensions.viewport.width
+  state.transform.scale.y = state.dimensions.screen.height / state.dimensions.viewport.height
 
   if state.settings.scaler == "aspect" or state.settings.scaler == "pixel" then
     local scaleVal = math.min(state.transform.scale.x, state.transform.scale.y)
@@ -32,8 +32,8 @@ local function calculateTransforms()
       scaleVal = math.max(math.floor(scaleVal), 1)
     end
     -- Calculate centering offset
-    state.transform.offset.x = math.floor((state.transform.scale.x - scaleVal) * (state.dimensions.shove.width / 2))
-    state.transform.offset.y = math.floor((state.transform.scale.y - scaleVal) * (state.dimensions.shove.height / 2))
+    state.transform.offset.x = math.floor((state.transform.scale.x - scaleVal) * (state.dimensions.viewport.width / 2))
+    state.transform.offset.y = math.floor((state.transform.scale.y - scaleVal) * (state.dimensions.viewport.height / 2))
     -- Apply same scale to width and height
     state.transform.scale.x, state.transform.scale.y = scaleVal, scaleVal
   elseif state.settings.scaler == "stretch" then
@@ -42,13 +42,13 @@ local function calculateTransforms()
   else
     -- No scaling
     state.transform.scale.x, state.transform.scale.y = 1, 1
-    -- Center the view in the window
-    state.transform.offset.x = math.floor((state.dimensions.window.width - state.dimensions.shove.width) / 2)
-    state.transform.offset.y = math.floor((state.dimensions.window.height - state.dimensions.shove.height) / 2)
+    -- Center in the screen
+    state.transform.offset.x = math.floor((state.dimensions.screen.width - state.dimensions.viewport.width) / 2)
+    state.transform.offset.y = math.floor((state.dimensions.screen.height - state.dimensions.viewport.height) / 2)
   end
   -- Calculate final draw dimensions
-  state.dimensions.draw.width = state.dimensions.window.width - state.transform.offset.x * 2
-  state.dimensions.draw.height = state.dimensions.window.height - state.transform.offset.y * 2
+  state.dimensions.rendered.width = state.dimensions.screen.width - state.transform.offset.x * 2
+  state.dimensions.rendered.height = state.dimensions.screen.height - state.transform.offset.y * 2
   -- Set appropriate filter based on scaling mode
   love.graphics.setDefaultFilter(state.settings.scaler == "pixel" and "nearest" or "linear")
 end
@@ -66,7 +66,7 @@ local function setupCanvas(canvasTable)
       name = params.name,
       private = params.private,
       shader = params.shader,
-      canvas = love.graphics.newCanvas(state.dimensions.shove.width, state.dimensions.shove.height),
+      canvas = love.graphics.newCanvas(state.dimensions.viewport.width, state.dimensions.viewport.height),
       stencil = params.stencil,
     })
   end
@@ -99,7 +99,7 @@ local function applyShaders(canvas, shaders)
       table.insert(state.render.canvases, {
         name = "_tmp",
         private = true,
-        canvas = love.graphics.newCanvas(state.dimensions.shove.width, state.dimensions.shove.height),
+        canvas = love.graphics.newCanvas(state.dimensions.viewport.width, state.dimensions.viewport.height),
       })
       tmp = getCanvasTable("_tmp")
     end
@@ -126,9 +126,9 @@ end
 -- Public API
 return {
   initResolution = function(width, height, settingsTable)
-    state.dimensions.shove.width = width
-    state.dimensions.shove.height = height
-    state.dimensions.window.width, state.dimensions.window.height = love.graphics.getDimensions()
+    state.dimensions.viewport.width = width
+    state.dimensions.viewport.height = height
+    state.dimensions.screen.width, state.dimensions.screen.height = love.graphics.getDimensions()
     state.settings = settingsTable or {}
     state.settings.scaler = state.settings.scaler or "aspect"
     state.settings.scaler_mode = state.settings.scaler_mode or "translate"
@@ -162,20 +162,22 @@ return {
     state.settings.scaler_mode = settingsTable.scaler_mode or state.settings.scaler_mode
   end,
 
-  toGame = function(x, y)
+  -- Convert coordinates from screen to game viewport coordinates
+  toViewport = function(x, y)
     x, y = x - state.transform.offset.x, y - state.transform.offset.y
-    local normalX, normalY = x / state.dimensions.draw.width, y / state.dimensions.draw.height
+    local normalX, normalY = x / state.dimensions.rendered.width, y / state.dimensions.rendered.height
 
-    x = (x >= 0 and x <= state.dimensions.shove.width * state.transform.scale.x) and
-        math.floor(normalX * state.dimensions.shove.width) or false
-    y = (y >= 0 and y <= state.dimensions.shove.height * state.transform.scale.y) and
-        math.floor(normalY * state.dimensions.shove.height) or false
+    x = (x >= 0 and x <= state.dimensions.viewport.width * state.transform.scale.x) and
+        math.floor(normalX * state.dimensions.viewport.width) or false
+    y = (y >= 0 and y <= state.dimensions.viewport.height * state.transform.scale.y) and
+        math.floor(normalY * state.dimensions.viewport.height) or false
     return x, y
   end,
 
-  toReal = function(x, y)
-    local realX = state.transform.offset.x + (state.dimensions.draw.width * x) / state.dimensions.shove.width
-    local realY = state.transform.offset.y + (state.dimensions.draw.height * y) / state.dimensions.shove.height
+  -- Convert coordinates from game viewport to screen coordinates
+  toScreen = function(x, y)
+    local realX = state.transform.offset.x + (state.dimensions.rendered.width * x) / state.dimensions.viewport.width
+    local realY = state.transform.offset.y + (state.dimensions.rendered.height * y) / state.dimensions.viewport.height
     return realX, realY
   end,
 
@@ -186,8 +188,8 @@ return {
     else
       love.graphics.translate(state.transform.offset.x, state.transform.offset.y)
       love.graphics.setScissor(state.transform.offset.x, state.transform.offset.y,
-                              state.dimensions.shove.width * state.transform.scale.x,
-                              state.dimensions.shove.height * state.transform.scale.y)
+                              state.dimensions.viewport.width * state.transform.scale.x,
+                              state.dimensions.viewport.height * state.transform.scale.y)
       love.graphics.push()
       love.graphics.scale(state.transform.scale.x, state.transform.scale.y)
     end
@@ -235,20 +237,44 @@ return {
   end,
 
   resize = function(width, height)
-    state.dimensions.window.width = width
-    state.dimensions.window.height = height
+    state.dimensions.screen.width = width
+    state.dimensions.screen.height = height
     calculateTransforms()
   end,
 
-  getWidth = function()
-    return state.dimensions.shove.width
+  getViewportWidth = function()
+    return state.dimensions.viewport.width
   end,
 
-  getHeight = function()
-    return state.dimensions.shove.height
+  getViewportHeight = function()
+    return state.dimensions.viewport.height
   end,
 
-  getDimensions = function()
-    return state.dimensions.shove.width, state.dimensions.shove.height
+  getViewportDimensions = function()
+    return state.dimensions.viewport.width, state.dimensions.viewport.height
+  end,
+
+  -- Returns the game viewport rectangle in screen coordinates (x, y, width, height)
+  getViewport = function()
+    local x = state.transform.offset.x
+    local y = state.transform.offset.y
+    local width = state.dimensions.viewport.width * state.transform.scale.x
+    local height = state.dimensions.viewport.height * state.transform.scale.y
+    return x, y, width, height
+  end,
+
+  -- Check if screen coordinates are within the game viewport
+  inViewport = function(x, y)
+    -- If stretch scaling is in use, coords are always in the viewport
+    if state.settings.scaler == "stretch" then
+      return true
+    end
+
+    local viewX, viewY, viewWidth, viewHeight = state.transform.offset.x, state.transform.offset.y,
+                                               state.dimensions.viewport.width * state.transform.scale.x,
+                                               state.dimensions.viewport.height * state.transform.scale.y
+
+    return x >= viewX and x < viewX + viewWidth and
+           y >= viewY and y < viewY + viewHeight
   end,
 }
