@@ -1,8 +1,8 @@
 -- Internal state variables grouped in a single-level table
 local state = {
   -- Settings
-  scaler = "aspect",
-  scaler_mode = "translate",
+  fitMethod = "aspect",
+  renderMode = "direct",
   -- Dimensions
   screen_width = 0,
   screen_height = 0,
@@ -24,10 +24,10 @@ local function calculateTransforms()
   state.scale_x = state.screen_width / state.viewport_width
   state.scale_y = state.screen_height / state.viewport_height
 
-  if state.scaler == "aspect" or state.scaler == "pixel" then
+  if state.fitMethod == "aspect" or state.fitMethod == "pixel" then
     local scaleVal = math.min(state.scale_x, state.scale_y)
     -- Apply pixel-perfect integer scaling if needed
-    if state.scaler == "pixel" then
+    if state.fitMethod == "pixel" then
       -- floor to nearest integer and fallback to scale 1
       scaleVal = math.max(math.floor(scaleVal), 1)
     end
@@ -36,7 +36,7 @@ local function calculateTransforms()
     state.offset_y = math.floor((state.scale_y - scaleVal) * (state.viewport_height / 2))
     -- Apply same scale to width and height
     state.scale_x, state.scale_y = scaleVal, scaleVal
-  elseif state.scaler == "stretch" then
+  elseif state.fitMethod == "stretch" then
     -- Stretch scaling: no offset
     state.offset_x, state.offset_y = 0, 0
   else
@@ -50,7 +50,7 @@ local function calculateTransforms()
   state.rendered_width = state.screen_width - state.offset_x * 2
   state.rendered_height = state.screen_height - state.offset_y * 2
   -- Set appropriate filter based on scaling mode
-  love.graphics.setDefaultFilter(state.scaler == "pixel" and "nearest" or "linear")
+  love.graphics.setDefaultFilter(state.fitMethod == "pixel" and "nearest" or "linear")
 end
 
 local function setupCanvas(canvasTable)
@@ -129,18 +129,16 @@ return {
     state.viewport_width = width
     state.viewport_height = height
     state.screen_width, state.screen_height = love.graphics.getDimensions()
-
-    -- Handle settings
     if settingsTable then
-      state.scaler = settingsTable.scaler or "aspect"
-      state.scaler_mode = settingsTable.scaler_mode or "translate"
+      state.fitMethod = settingsTable.fitMethod or "aspect"
+      state.renderMode = settingsTable.renderMode or "direct"
     else
-      state.scaler = "aspect"
-      state.scaler_mode = "translate"
+      state.fitMethod = "aspect"
+      state.renderMode = "direct"
     end
 
     calculateTransforms()
-    if state.scaler_mode == "canvas" then
+    if state.renderMode == "buffer" then
       setupCanvas({ "default" })
     end
   end,
@@ -148,7 +146,7 @@ return {
   setupCanvas = setupCanvas,
 
   setCanvas = function(name)
-    if state.scaler_mode ~= "canvas" then
+    if state.renderMode ~= "buffer" then
       return true
     end
 
@@ -165,8 +163,8 @@ return {
   end,
 
   updateSettings = function(settingsTable)
-    state.scaler = settingsTable.scaler or state.scaler
-    state.scaler_mode = settingsTable.scaler_mode or state.scaler_mode
+    state.fitMethod = settingsTable.fitMethod or state.fitMethod
+    state.renderMode = settingsTable.renderMode or state.renderMode
   end,
 
   -- Convert coordinates from screen to game viewport coordinates
@@ -189,7 +187,7 @@ return {
   end,
 
   startDraw = function()
-    if state.scaler_mode == "canvas" then
+    if state.renderMode == "buffer" then
       love.graphics.push()
       love.graphics.setCanvas(state.render.canvasOptions)
     else
@@ -203,7 +201,7 @@ return {
   end,
 
   stopDraw = function(shader)
-    if state.scaler_mode == "canvas" then
+    if state.renderMode == "buffer" then
       local render = getCanvasTable("_render")
 
       love.graphics.pop()
@@ -273,7 +271,7 @@ return {
   -- Check if screen coordinates are within the game viewport
   inViewport = function(x, y)
     -- If stretch scaling is in use, coords are always in the viewport
-    if state.scaler == "stretch" then
+    if state.fitMethod == "stretch" then
       return true
     end
 

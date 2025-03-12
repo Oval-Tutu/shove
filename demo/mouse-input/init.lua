@@ -1,6 +1,6 @@
 return function()
   love.window.setMode(1280, 720, { resizable = true })
-  shove.initResolution(800, 600, { scaler = "none", scaler_mode = "canvas" })
+  shove.initResolution(800, 600, { fitMethod = "none", renderMode = "buffer" })
 
   function love.load()
     love.mouse.setVisible(false)
