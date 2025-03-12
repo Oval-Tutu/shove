@@ -1,7 +1,8 @@
 -- Internal state variables grouped in a local table
 local state = {
   settings = {
-    scaler = "aspect"
+    scaler = "aspect",
+    scaler_mode = "translate"
   },
   dimensions = {
     window = {width = 0, height = 0},
@@ -82,7 +83,7 @@ local function getCanvasTable(name)
 end
 
 local function start()
-  if state.settings.canvas then
+  if state.settings.scaler_mode == "canvas" then
     love.graphics.push()
     love.graphics.setCanvas(state.render.canvasOptions)
   else
@@ -139,7 +140,7 @@ local function applyShaders(canvas, shaders)
 end
 
 local function finish(shader)
-  if state.settings.canvas then
+  if state.settings.scaler_mode == "canvas" then
     local render = getCanvasTable("_render")
 
     love.graphics.pop()
@@ -193,8 +194,9 @@ return {
     state.dimensions.window.width, state.dimensions.window.height = love.graphics.getDimensions()
     state.settings = settingsTable or {}
     state.settings.scaler = state.settings.scaler or "aspect"
+    state.settings.scaler_mode = state.settings.scaler_mode or "translate"
     calculateTransforms()
-    if state.settings.canvas then
+    if state.settings.scaler_mode == "canvas" then
       setupCanvas({ "default" })
     end
   end,
@@ -202,7 +204,7 @@ return {
   setupCanvas = setupCanvas,
 
   setCanvas = function(name)
-    if not state.settings.canvas then
+    if state.settings.scaler_mode ~= "canvas" then
       return true
     end
 
@@ -220,7 +222,7 @@ return {
 
   updateSettings = function(settingsTable)
     state.settings.scaler = settingsTable.scaler or state.settings.scaler
-    state.settings.canvas = settingsTable.canvas or state.settings.canvas
+    state.settings.scaler_mode = settingsTable.scaler_mode or state.settings.scaler_mode
   end,
 
   toGame = function(x, y)
