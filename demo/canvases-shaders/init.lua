@@ -3,7 +3,7 @@ return function()
   local windowWidth, windowHeight = love.window.getDesktopDimensions()
   windowWidth, windowHeight = windowWidth * 0.5, windowHeight * 0.5
   love.window.setMode(windowWidth, windowHeight, { fullscreen = false, highdpi = true, resizable = true })
-  shove.setupScreen(gameWidth, gameHeight, { canvas = true })
+  shove.setupScreen(gameWidth, gameHeight, { scaler_mode = "canvas" })
 
   function love.load()
     time = 0

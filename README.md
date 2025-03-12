@@ -9,8 +9,10 @@ Under the "Draw stuff here!" comment, add some drawing functions to see Shöve i
 ```lua
 shove = require("shove")
 
-love.window.setMode(1920, 1080, {resizable = true}) -- Resizable 1920x1080 window
-shove.setupScreen(1920, 1080, {scaler = "normal"}) -- 1920x1080 game resolution, scaled
+-- Resizable 1920x1080 window
+love.window.setMode(1920, 1080, {resizable = true})
+-- 1920x1080 game resolution, scaled
+shove.setupScreen(1920, 1080, {scaler = "aspect"})
 
 -- Make sure shove follows LÖVE's resizes
 function love.resize(width, height)
@@ -33,17 +35,19 @@ Press <kbd>SPACE</kbd> to switch between them.
 
 After applying changes to LÖVE's window using `love.window.setMode()`, initialise Shöve:
 ```lua
-shove.setupScreen(shoveWidth, shoveHeight, {scaler = ..., canvas = ...})
+shove.setupScreen(shoveWidth, shoveHeight, {scaler = ..., scaler_mode = ...})
 ```
 `shoveWidth` and `shoveHeight` represent Shöve's fixed resolution.
 
 The last argument is a table containing settings for Shöve:
-* `scaler` (string): upscale Shöve's resolution to the current window size
-  * `"aspect"`: fit to the current window size, preserving aspect ratio
-  * `"pixel"`: pixel-perfect scaling using integer scaling (for values ≥1, otherwise uses normal scaling)
+* `scaler` (string): select Shöve's resolution scaler
+  * `"aspect"`: preserve aspect ratio (*default*)
+  * `"pixel"`: pixel-perfect scaling, applies nearest-neighbor filtering
   * `"stretch"`: stretch to the current window size
   * `"none"`: no scaling
-* `canvas` (bool): use and upscale canvas set to Shöve's resolution
+* `scaler_mode` (string): select scaler mode
+  * `"translate"`: uses `love.graphics.translate()` and `love.graphics.scale()` (*default*)
+  * `"canvas"`: uses `love.graphics.setCanvas()`
 
 Hook Shöve into the `love.resize()` function so that it follows LÖVE's resizes:
 ```lua
@@ -76,7 +80,7 @@ shove.setupCanvas({{name = "multiple_shaders", shader = {shader1, shader2}}})
 ```
 
 ## Advanced canvases/shaders
-Shöve provides basic canvas and shader functionality through the `canvas` flag in `shove.setupScreen()` and `shove.setShader()`, but you can also create additional canvases, name them for later use and apply multiple shaders to them.
+Shöve provides basic canvas and shader functionality through the `scaler_mode` setting in `shove.setupScreen()` and `shove.setShader()`, but you can also create additional canvases, name them for later use and apply multiple shaders to them.
 
 Set up custom canvases:
 ```lua
@@ -107,7 +111,8 @@ shove.setShader([canvasName], shader)
 ```
 You don't need to call this every frame.
 Simply call it once, and it will be stored into **Shöve** until you change it back to something else.
-If no `canvasName` is passed, shader will apply to the final render. Use it at your advantage to combine shader effects.
+If no `canvasName` is passed, shader will apply to the final render.
+Use it at your advantage to combine shader effects.
 
 Convert coordinates:
 ```lua

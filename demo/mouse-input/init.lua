@@ -1,6 +1,6 @@
 return function()
   love.window.setMode(1280, 720, { resizable = true })
-  shove.setupScreen(800, 600, { canvas = true })
+  shove.setupScreen(800, 600, { scaler_mode = "canvas" })
 
   function love.load()
     love.mouse.setVisible(false)
