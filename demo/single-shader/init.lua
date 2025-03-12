@@ -5,7 +5,7 @@ return function()
   windowWidth, windowHeight = windowWidth * 0.5, windowHeight * 0.5
 
   love.window.setMode(windowWidth, windowHeight, { resizable = true })
-  shove.setupScreen(gameWidth, gameHeight, { scaler_mode = "canvas" })
+  shove.initResolution(gameWidth, gameHeight, { scaler_mode = "canvas" })
 
   function love.load()
     time = 0
@@ -20,9 +20,9 @@ return function()
   end
 
   function love.draw()
-    shove.start()
+    shove.startDraw()
       love.graphics.setColor(255, 255, 255)
       love.graphics.draw(image, (gameWidth - image:getWidth()) * 0.5, (gameHeight - image:getHeight()) * 0.5)
-    shove.finish()
+    shove.stopDraw()
   end
 end

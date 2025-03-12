@@ -5,7 +5,7 @@ return function()
   windowWidth, windowHeight = windowWidth * 0.5, windowHeight * 0.5
 
   love.window.setMode(windowWidth, windowHeight, { fullscreen = false, resizable = true })
-  shove.setupScreen(gameWidth, gameHeight, { scaler = "pixel" })
+  shove.initResolution(gameWidth, gameHeight, { scaler = "pixel" })
 
   shove.setupCanvas({
     { name = "main_canvas" },
@@ -23,7 +23,7 @@ return function()
   end
 
   function love.draw()
-    shove.start()
+    shove.startDraw()
       -- apply stencil
       shove.setCanvas("stencil_canvas")
       love.graphics.stencil(function()
@@ -64,6 +64,6 @@ return function()
           mouseY + 1
         )
       end
-    shove.finish()
+    shove.stopDraw()
   end
 end

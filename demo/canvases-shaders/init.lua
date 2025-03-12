@@ -3,7 +3,7 @@ return function()
   local windowWidth, windowHeight = love.window.getDesktopDimensions()
   windowWidth, windowHeight = windowWidth * 0.5, windowHeight * 0.5
   love.window.setMode(windowWidth, windowHeight, { fullscreen = false, highdpi = true, resizable = true })
-  shove.setupScreen(gameWidth, gameHeight, { scaler_mode = "canvas" })
+  shove.initResolution(gameWidth, gameHeight, { scaler_mode = "canvas" })
 
   function love.load()
     time = 0
@@ -27,7 +27,7 @@ return function()
   end
 
   function love.draw()
-    shove.start()
+    shove.startDraw()
       love.graphics.setColor(255, 255, 255)
       shove.setCanvas("shader")
       --global shader + canvas shader will be applied
@@ -35,6 +35,6 @@ return function()
       shove.setCanvas("noshader")
        --only global shader will be applied
       love.graphics.draw(image2, (gameWidth - image2:getWidth()) * 0.5, (gameHeight - image2:getHeight()) * 0.5 + 100)
-    shove.finish()
+    shove.stopDraw()
   end
 end
