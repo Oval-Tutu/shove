@@ -115,7 +115,6 @@ local function applyShaders(canvas, shaders)
         private = true,
         canvas = love.graphics.newCanvas(state.dimensions.shove.width, state.dimensions.shove.height),
       })
-
       tmp = getCanvasTable("_tmp")
     end
 
@@ -131,7 +130,6 @@ local function applyShaders(canvas, shaders)
       love.graphics.setCanvas(inputCanvas)
     end
     love.graphics.pop()
-
     love.graphics.setCanvas(_canvas)
     love.graphics.draw(outputCanvas)
   end
@@ -144,7 +142,6 @@ local function finish(shader)
     local render = getCanvasTable("_render")
 
     love.graphics.pop()
-
     -- Draw canvas
     love.graphics.setCanvas(render.canvas)
     -- Do not draw render yet
@@ -153,7 +150,6 @@ local function finish(shader)
 
       if not canvasTable.private then
         local shader = canvasTable.shader
-
         applyShaders(canvasTable.canvas, type(shader) == "table" and shader or { shader })
       end
     end
@@ -165,7 +161,6 @@ local function finish(shader)
     love.graphics.scale(state.transform.scale.x, state.transform.scale.y)
     do
       local shader = shader or render.shader
-
       applyShaders(render.canvas, type(shader) == "table" and shader or { shader })
     end
     love.graphics.pop()
@@ -226,23 +221,19 @@ return {
   end,
 
   toGame = function(x, y)
-    local normalX, normalY
-
     x, y = x - state.transform.offset.x, y - state.transform.offset.y
-    normalX, normalY = x / state.dimensions.draw.width, y / state.dimensions.draw.height
+    local normalX, normalY = x / state.dimensions.draw.width, y / state.dimensions.draw.height
 
     x = (x >= 0 and x <= state.dimensions.shove.width * state.transform.scale.x) and
         math.floor(normalX * state.dimensions.shove.width) or false
     y = (y >= 0 and y <= state.dimensions.shove.height * state.transform.scale.y) and
         math.floor(normalY * state.dimensions.shove.height) or false
-
     return x, y
   end,
 
   toReal = function(x, y)
     local realX = state.transform.offset.x + (state.dimensions.draw.width * x) / state.dimensions.shove.width
     local realY = state.transform.offset.y + (state.dimensions.draw.height * y) / state.dimensions.shove.height
-
     return realX, realY
   end,
 
