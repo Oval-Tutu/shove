@@ -1,56 +1,56 @@
--- Internal state variables grouped in a local table
+-- Internal state variables grouped in a single-level table
 local state = {
-  settings = {
-    scaler = "aspect",
-    scaler_mode = "translate"
-  },
-  dimensions = {
-    screen = {width = 0, height = 0},
-    viewport = {width = 0, height = 0},
-    rendered = {width = 0, height = 0}
-  },
-  transform = {
-    scale = {x = 0, y = 0},
-    offset = {x = 0, y = 0}
-  },
-  render = {
-    canvases = {},
-    canvasOptions = {}
-  }
+  -- Settings
+  scaler = "aspect",
+  scaler_mode = "translate",
+  -- Dimensions
+  screen_width = 0,
+  screen_height = 0,
+  viewport_width = 0,
+  viewport_height = 0,
+  rendered_width = 0,
+  rendered_height = 0,
+  -- Transform
+  scale_x = 0,
+  scale_y = 0,
+  offset_x = 0,
+  offset_y = 0,
+  -- Keep render as-is
+  render = { canvases = {}, canvasOptions = {} }
 }
 
 local function calculateTransforms()
   -- Calculate initial scale factors (used by most modes)
-  state.transform.scale.x = state.dimensions.screen.width / state.dimensions.viewport.width
-  state.transform.scale.y = state.dimensions.screen.height / state.dimensions.viewport.height
+  state.scale_x = state.screen_width / state.viewport_width
+  state.scale_y = state.screen_height / state.viewport_height
 
-  if state.settings.scaler == "aspect" or state.settings.scaler == "pixel" then
-    local scaleVal = math.min(state.transform.scale.x, state.transform.scale.y)
+  if state.scaler == "aspect" or state.scaler == "pixel" then
+    local scaleVal = math.min(state.scale_x, state.scale_y)
     -- Apply pixel-perfect integer scaling if needed
-    if state.settings.scaler == "pixel" then
+    if state.scaler == "pixel" then
       -- floor to nearest integer and fallback to scale 1
       scaleVal = math.max(math.floor(scaleVal), 1)
     end
     -- Calculate centering offset
-    state.transform.offset.x = math.floor((state.transform.scale.x - scaleVal) * (state.dimensions.viewport.width / 2))
-    state.transform.offset.y = math.floor((state.transform.scale.y - scaleVal) * (state.dimensions.viewport.height / 2))
+    state.offset_x = math.floor((state.scale_x - scaleVal) * (state.viewport_width / 2))
+    state.offset_y = math.floor((state.scale_y - scaleVal) * (state.viewport_height / 2))
     -- Apply same scale to width and height
-    state.transform.scale.x, state.transform.scale.y = scaleVal, scaleVal
-  elseif state.settings.scaler == "stretch" then
+    state.scale_x, state.scale_y = scaleVal, scaleVal
+  elseif state.scaler == "stretch" then
     -- Stretch scaling: no offset
-    state.transform.offset.x, state.transform.offset.y = 0, 0
+    state.offset_x, state.offset_y = 0, 0
   else
     -- No scaling
-    state.transform.scale.x, state.transform.scale.y = 1, 1
+    state.scale_x, state.scale_y = 1, 1
     -- Center in the screen
-    state.transform.offset.x = math.floor((state.dimensions.screen.width - state.dimensions.viewport.width) / 2)
-    state.transform.offset.y = math.floor((state.dimensions.screen.height - state.dimensions.viewport.height) / 2)
+    state.offset_x = math.floor((state.screen_width - state.viewport_width) / 2)
+    state.offset_y = math.floor((state.screen_height - state.viewport_height) / 2)
   end
   -- Calculate final draw dimensions
-  state.dimensions.rendered.width = state.dimensions.screen.width - state.transform.offset.x * 2
-  state.dimensions.rendered.height = state.dimensions.screen.height - state.transform.offset.y * 2
+  state.rendered_width = state.screen_width - state.offset_x * 2
+  state.rendered_height = state.screen_height - state.offset_y * 2
   -- Set appropriate filter based on scaling mode
-  love.graphics.setDefaultFilter(state.settings.scaler == "pixel" and "nearest" or "linear")
+  love.graphics.setDefaultFilter(state.scaler == "pixel" and "nearest" or "linear")
 end
 
 local function setupCanvas(canvasTable)
@@ -66,7 +66,7 @@ local function setupCanvas(canvasTable)
       name = params.name,
       private = params.private,
       shader = params.shader,
-      canvas = love.graphics.newCanvas(state.dimensions.viewport.width, state.dimensions.viewport.height),
+      canvas = love.graphics.newCanvas(state.viewport_width, state.viewport_height),
       stencil = params.stencil,
     })
   end
@@ -99,7 +99,7 @@ local function applyShaders(canvas, shaders)
       table.insert(state.render.canvases, {
         name = "_tmp",
         private = true,
-        canvas = love.graphics.newCanvas(state.dimensions.viewport.width, state.dimensions.viewport.height),
+        canvas = love.graphics.newCanvas(state.viewport_width, state.viewport_height),
       })
       tmp = getCanvasTable("_tmp")
     end
@@ -126,14 +126,21 @@ end
 -- Public API
 return {
   initResolution = function(width, height, settingsTable)
-    state.dimensions.viewport.width = width
-    state.dimensions.viewport.height = height
-    state.dimensions.screen.width, state.dimensions.screen.height = love.graphics.getDimensions()
-    state.settings = settingsTable or {}
-    state.settings.scaler = state.settings.scaler or "aspect"
-    state.settings.scaler_mode = state.settings.scaler_mode or "translate"
+    state.viewport_width = width
+    state.viewport_height = height
+    state.screen_width, state.screen_height = love.graphics.getDimensions()
+
+    -- Handle settings
+    if settingsTable then
+      state.scaler = settingsTable.scaler or "aspect"
+      state.scaler_mode = settingsTable.scaler_mode or "translate"
+    else
+      state.scaler = "aspect"
+      state.scaler_mode = "translate"
+    end
+
     calculateTransforms()
-    if state.settings.scaler_mode == "canvas" then
+    if state.scaler_mode == "canvas" then
       setupCanvas({ "default" })
     end
   end,
@@ -141,7 +148,7 @@ return {
   setupCanvas = setupCanvas,
 
   setCanvas = function(name)
-    if state.settings.scaler_mode ~= "canvas" then
+    if state.scaler_mode ~= "canvas" then
       return true
     end
 
@@ -158,45 +165,45 @@ return {
   end,
 
   updateSettings = function(settingsTable)
-    state.settings.scaler = settingsTable.scaler or state.settings.scaler
-    state.settings.scaler_mode = settingsTable.scaler_mode or state.settings.scaler_mode
+    state.scaler = settingsTable.scaler or state.scaler
+    state.scaler_mode = settingsTable.scaler_mode or state.scaler_mode
   end,
 
   -- Convert coordinates from screen to game viewport coordinates
   toViewport = function(x, y)
-    x, y = x - state.transform.offset.x, y - state.transform.offset.y
-    local normalX, normalY = x / state.dimensions.rendered.width, y / state.dimensions.rendered.height
+    x, y = x - state.offset_x, y - state.offset_y
+    local normalX, normalY = x / state.rendered_width, y / state.rendered_height
 
-    x = (x >= 0 and x <= state.dimensions.viewport.width * state.transform.scale.x) and
-        math.floor(normalX * state.dimensions.viewport.width) or false
-    y = (y >= 0 and y <= state.dimensions.viewport.height * state.transform.scale.y) and
-        math.floor(normalY * state.dimensions.viewport.height) or false
+    x = (x >= 0 and x <= state.viewport_width * state.scale_x) and
+        math.floor(normalX * state.viewport_width) or false
+    y = (y >= 0 and y <= state.viewport_height * state.scale_y) and
+        math.floor(normalY * state.viewport_height) or false
     return x, y
   end,
 
   -- Convert coordinates from game viewport to screen coordinates
   toScreen = function(x, y)
-    local realX = state.transform.offset.x + (state.dimensions.rendered.width * x) / state.dimensions.viewport.width
-    local realY = state.transform.offset.y + (state.dimensions.rendered.height * y) / state.dimensions.viewport.height
+    local realX = state.offset_x + (state.rendered_width * x) / state.viewport_width
+    local realY = state.offset_y + (state.rendered_height * y) / state.viewport_height
     return realX, realY
   end,
 
   startDraw = function()
-    if state.settings.scaler_mode == "canvas" then
+    if state.scaler_mode == "canvas" then
       love.graphics.push()
       love.graphics.setCanvas(state.render.canvasOptions)
     else
-      love.graphics.translate(state.transform.offset.x, state.transform.offset.y)
-      love.graphics.setScissor(state.transform.offset.x, state.transform.offset.y,
-                              state.dimensions.viewport.width * state.transform.scale.x,
-                              state.dimensions.viewport.height * state.transform.scale.y)
+      love.graphics.translate(state.offset_x, state.offset_y)
+      love.graphics.setScissor(state.offset_x, state.offset_y,
+                              state.viewport_width * state.scale_x,
+                              state.viewport_height * state.scale_y)
       love.graphics.push()
-      love.graphics.scale(state.transform.scale.x, state.transform.scale.y)
+      love.graphics.scale(state.scale_x, state.scale_y)
     end
   end,
 
   stopDraw = function(shader)
-    if state.settings.scaler_mode == "canvas" then
+    if state.scaler_mode == "canvas" then
       local render = getCanvasTable("_render")
 
       love.graphics.pop()
@@ -213,15 +220,15 @@ return {
       love.graphics.setCanvas()
 
       -- Now draw render
-      love.graphics.translate(state.transform.offset.x, state.transform.offset.y)
+      love.graphics.translate(state.offset_x, state.offset_y)
       love.graphics.push()
-        love.graphics.scale(state.transform.scale.x, state.transform.scale.y)
+        love.graphics.scale(state.scale_x, state.scale_y)
         do
           local shader = shader or render.shader
           applyShaders(render.canvas, type(shader) == "table" and shader or { shader })
         end
       love.graphics.pop()
-      love.graphics.translate(-state.transform.offset.x, -state.transform.offset.y)
+      love.graphics.translate(-state.offset_x, -state.offset_y)
       -- Clear canvas
       for i = 1, #state.render.canvases do
         love.graphics.setCanvas(state.render.canvases[i].canvas)
@@ -232,47 +239,47 @@ return {
     else
       love.graphics.pop()
       love.graphics.setScissor()
-      love.graphics.translate(-state.transform.offset.x, -state.transform.offset.y)
+      love.graphics.translate(-state.offset_x, -state.offset_y)
     end
   end,
 
   resize = function(width, height)
-    state.dimensions.screen.width = width
-    state.dimensions.screen.height = height
+    state.screen_width = width
+    state.screen_height = height
     calculateTransforms()
   end,
 
   getViewportWidth = function()
-    return state.dimensions.viewport.width
+    return state.viewport_width
   end,
 
   getViewportHeight = function()
-    return state.dimensions.viewport.height
+    return state.viewport_height
   end,
 
   getViewportDimensions = function()
-    return state.dimensions.viewport.width, state.dimensions.viewport.height
+    return state.viewport_width, state.viewport_height
   end,
 
   -- Returns the game viewport rectangle in screen coordinates (x, y, width, height)
   getViewport = function()
-    local x = state.transform.offset.x
-    local y = state.transform.offset.y
-    local width = state.dimensions.viewport.width * state.transform.scale.x
-    local height = state.dimensions.viewport.height * state.transform.scale.y
+    local x = state.offset_x
+    local y = state.offset_y
+    local width = state.viewport_width * state.scale_x
+    local height = state.viewport_height * state.scale_y
     return x, y, width, height
   end,
 
   -- Check if screen coordinates are within the game viewport
   inViewport = function(x, y)
     -- If stretch scaling is in use, coords are always in the viewport
-    if state.settings.scaler == "stretch" then
+    if state.scaler == "stretch" then
       return true
     end
 
-    local viewX, viewY, viewWidth, viewHeight = state.transform.offset.x, state.transform.offset.y,
-                                               state.dimensions.viewport.width * state.transform.scale.x,
-                                               state.dimensions.viewport.height * state.transform.scale.y
+    local viewX, viewY, viewWidth, viewHeight = state.offset_x, state.offset_y,
+                                               state.viewport_width * state.scale_x,
+                                               state.viewport_height * state.scale_y
 
     return x >= viewX and x < viewX + viewWidth and
            y >= viewY and y < viewY + viewHeight
