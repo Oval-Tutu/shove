@@ -203,7 +203,6 @@ return {
       -- Do not draw render yet
       for i = 1, #state.render.canvases do
         local canvasTable = state.render.canvases[i]
-
         if not canvasTable.private then
           local shader = canvasTable.shader
           applyShaders(canvasTable.canvas, type(shader) == "table" and shader or { shader })
@@ -214,20 +213,18 @@ return {
       -- Now draw render
       love.graphics.translate(state.transform.offset.x, state.transform.offset.y)
       love.graphics.push()
-      love.graphics.scale(state.transform.scale.x, state.transform.scale.y)
-      do
-        local shader = shader or render.shader
-        applyShaders(render.canvas, type(shader) == "table" and shader or { shader })
-      end
+        love.graphics.scale(state.transform.scale.x, state.transform.scale.y)
+        do
+          local shader = shader or render.shader
+          applyShaders(render.canvas, type(shader) == "table" and shader or { shader })
+        end
       love.graphics.pop()
       love.graphics.translate(-state.transform.offset.x, -state.transform.offset.y)
-
       -- Clear canvas
       for i = 1, #state.render.canvases do
         love.graphics.setCanvas(state.render.canvases[i].canvas)
         love.graphics.clear()
       end
-
       love.graphics.setCanvas()
       love.graphics.setShader()
     else
