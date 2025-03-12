@@ -5,13 +5,14 @@ return function()
   windowWidth, windowHeight = windowWidth * 0.5, windowHeight * 0.5
 
   love.window.setMode(windowWidth, windowHeight, { resizable = true })
-  shove.initResolution(gameWidth, gameHeight, { renderMode = "buffer" })
+  shove.initResolution(gameWidth, gameHeight, { renderMode = "layer" })
 
   function love.load()
     time = 0
     image = love.graphics.newImage("single-shader/love.png")
     shader = love.graphics.newShader("single-shader/shader.fs")
-    shove.setShader(shader)
+    shove.createLayer("image")
+    shove.addEffect("image", shader)
   end
 
   function love.update(dt)
@@ -21,8 +22,13 @@ return function()
 
   function love.draw()
     shove.beginDraw()
-      love.graphics.setColor(255, 255, 255)
-      love.graphics.draw(image, (gameWidth - image:getWidth()) * 0.5, (gameHeight - image:getHeight()) * 0.5)
+      shove.beginLayer("background")
+        love.graphics.setBackgroundColor(0, 0, 0)
+      shove.endLayer()
+
+      shove.beginLayer("image")
+        love.graphics.draw(image, (gameWidth - image:getWidth()) * 0.5, (gameHeight - image:getHeight()) * 0.5)
+      shove.endLayer()
     shove.endDraw()
   end
 end

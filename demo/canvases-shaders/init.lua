@@ -3,11 +3,7 @@ return function()
   local windowWidth, windowHeight = love.window.getDesktopDimensions()
   windowWidth, windowHeight = windowWidth * 0.5, windowHeight * 0.5
   love.window.setMode(windowWidth, windowHeight, { fullscreen = false, highdpi = true, resizable = true })
-  shove.initResolution(gameWidth, gameHeight, { renderMode = "buffer" })
-
-  -- Create layers with effects
-  shove.createLayer("shader")
-  shove.createLayer("noshader")
+  shove.initResolution(gameWidth, gameHeight, { renderMode = "layer" })
 
   function love.load()
     time = 0
@@ -16,11 +12,15 @@ return function()
     shader1 = love.graphics.newShader("canvases-shaders/shader1.fs")
     shader2 = love.graphics.newShader("canvases-shaders/shader2.fs")
 
-    -- Set effects for layers
-    shove.setLayerEffects("shader", shader1)
+    -- Create layers
+    shove.createLayer("image1")
+    shove.createLayer("image2")
 
-    -- Global shader
-    shove.setShader(shader2)
+    -- Add effect to "image1" layer
+    shove.addEffect("image1", shader1)
+
+    -- Add global effect that will be applied to all layers
+    shove.addGlobalEffect(shader2)
   end
 
   function love.update(dt)
@@ -31,17 +31,17 @@ return function()
 
   function love.draw()
     shove.beginDraw()
-      love.graphics.setColor(1, 1, 1)
+      shove.beginLayer("background")
+        love.graphics.setBackgroundColor(0, 0, 0)
+      shove.endLayer()
 
-      -- Draw image with layer shader
-      shove.beginLayer("shader")
-        --global shader + canvas shader will be applied
+      --Draw image1 that will have global and layer effects applied
+      shove.beginLayer("image1")
         love.graphics.draw(image1, (gameWidth - image1:getWidth()) * 0.5, (gameHeight - image1:getHeight()) * 0.5 - 100)
       shove.endLayer()
 
-      -- Draw image with only global shader
-      shove.beginLayer("noshader")
-        --only global shader will be applied
+      -- Draw image2 that will only have global effects applied
+      shove.beginLayer("image2")
         love.graphics.draw(image2, (gameWidth - image2:getWidth()) * 0.5, (gameHeight - image2:getHeight()) * 0.5 + 100)
       shove.endLayer()
     shove.endDraw()
