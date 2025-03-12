@@ -16,7 +16,7 @@ return function()
   end
 
   function love.draw()
-    shove.startDraw()
+    shove.beginDraw()
       local mouseX, mouseY = love.mouse.getPosition()
       -- If false is returned, that means the mouse is outside the game screen
       mouseX, mouseY = shove.toViewport(mouseX, mouseY)
@@ -71,6 +71,6 @@ return function()
           mouseY + 1
         )
       end
-    shove.stopDraw()
+    shove.endDraw()
   end
 end

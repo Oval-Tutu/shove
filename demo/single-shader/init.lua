@@ -20,9 +20,9 @@ return function()
   end
 
   function love.draw()
-    shove.startDraw()
+    shove.beginDraw()
       love.graphics.setColor(255, 255, 255)
       love.graphics.draw(image, (gameWidth - image:getWidth()) * 0.5, (gameHeight - image:getHeight()) * 0.5)
-    shove.stopDraw()
+    shove.endDraw()
   end
 end

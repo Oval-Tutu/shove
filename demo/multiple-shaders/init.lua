@@ -11,7 +11,11 @@ return function()
     image = love.graphics.newImage("multiple-shaders/love.png")
     shader1 = love.graphics.newShader("multiple-shaders/shader1.fs")
     shader2 = love.graphics.newShader("multiple-shaders/shader2.fs")
-    shove.setShader({ shader1, shader2 })
+
+    -- Use the new effect system to chain multiple shaders
+    shove.clearGlobalEffects()
+    shove.addGlobalEffect(shader1)
+    shove.addGlobalEffect(shader2)
   end
 
   function love.update(dt)
@@ -21,9 +25,9 @@ return function()
   end
 
   function love.draw()
-    shove.startDraw()
-      love.graphics.setColor(255, 255, 255)
+    shove.beginDraw()
+      love.graphics.setColor(1, 1, 1)
       love.graphics.draw(image, (gameWidth - image:getWidth()) * 0.5, (gameHeight - image:getHeight()) * 0.5)
-    shove.stopDraw()
+    shove.endDraw()
   end
 end
