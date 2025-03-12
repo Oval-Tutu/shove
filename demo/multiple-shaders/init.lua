@@ -4,7 +4,7 @@ return function()
   windowWidth, windowHeight = windowWidth * 0.5, windowHeight * 0.5
 
   love.window.setMode(windowWidth, windowHeight, { resizable = true })
-  shove.initResolution(gameWidth, gameHeight, { renderMode = "buffer" })
+  shove.initResolution(gameWidth, gameHeight, { renderMode = "layer" })
 
   function love.load()
     time = 0
@@ -12,8 +12,7 @@ return function()
     shader1 = love.graphics.newShader("multiple-shaders/shader1.fs")
     shader2 = love.graphics.newShader("multiple-shaders/shader2.fs")
 
-    -- Use the new effect system to chain multiple shaders
-    shove.clearGlobalEffects()
+    -- Add global effects to chain multiple shaders
     shove.addGlobalEffect(shader1)
     shove.addGlobalEffect(shader2)
   end
@@ -26,7 +25,7 @@ return function()
 
   function love.draw()
     shove.beginDraw()
-      love.graphics.setColor(1, 1, 1)
+      love.graphics.setBackgroundColor(0, 0, 0)
       love.graphics.draw(image, (gameWidth - image:getWidth()) * 0.5, (gameHeight - image:getHeight()) * 0.5)
     shove.endDraw()
   end

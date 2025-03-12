@@ -7,7 +7,7 @@ return function()
   love.window.setMode(windowWidth, windowHeight, { fullscreen = false, resizable = true })
   shove.initResolution(gameWidth, gameHeight, { fitMethod = "pixel" })
 
-  -- Create layers with the new API
+  -- Create layers
   shove.createLayer("main_canvas")
   shove.createLayer("stencil_canvas", {stencil = true})
 
@@ -23,7 +23,9 @@ return function()
 
   function love.draw()
     shove.beginDraw()
-      -- Apply stencil using new API
+      shove.beginLayer("background")
+        love.graphics.setBackgroundColor(0, 0, 0)
+      shove.endLayer()
       shove.beginLayer("stencil_canvas")
         love.graphics.stencil(function()
           love.graphics.setColor(1, 1, 1)
@@ -45,9 +47,8 @@ return function()
       -- Draw cursor on a different layer
       shove.beginLayer("main_canvas")
         love.graphics.setColor(1, 1, 1)
-        local mouseX, mouseY = love.mouse.getPosition()
-        mouseX, mouseY = shove.toViewport(mouseX, mouseY)
-        if mouseX and mouseY then --cursor
+        local insideViewport, mouseX, mouseY = shove.mouseToViewport()
+        if insideViewport then
           love.graphics.points(
             mouseX,
             mouseY - 1,
