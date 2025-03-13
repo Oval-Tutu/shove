@@ -1,3 +1,19 @@
+---@class ShoveState
+---@field fitMethod "aspect"|"pixel"|"stretch"|"none" Scaling method
+---@field renderMode "direct"|"layer" Rendering approach
+---@field screen_width number Window width
+---@field screen_height number Window height
+---@field viewport_width number Internal game width
+---@field viewport_height number Internal game height
+---@field rendered_width number Actual rendered width after scaling
+---@field rendered_height number Actual rendered height after scaling
+---@field scale_x number Horizontal scaling factor
+---@field scale_y number Vertical scaling factor
+---@field offset_x number Horizontal offset for centering
+---@field offset_y number Vertical offset for centering
+---@field layers ShoveLayerSystem Layer management system
+---@field maskShader love.Shader Shader used for layer masking
+---@field inDrawMode boolean Whether we're currently in drawing mode
 -- Internal state variables
 local state = {
   -- Settings
@@ -26,7 +42,23 @@ local state = {
   maskShader = nil
 }
 
--- Create mask shader for layer masking
+---@class ShoveLayerSystem
+---@field byName table<string, ShoveLayer> Layers indexed by name
+---@field ordered ShoveLayer[] Ordered array for rendering sequence
+---@field active ShoveLayer|nil Currently active layer
+---@field composite ShoveLayer|nil Composite layer for final output
+
+---@class ShoveLayer
+---@field name string Layer name
+---@field zIndex number Z-order position (lower numbers draw first)
+---@field canvas love.Canvas Canvas for drawing
+---@field visible boolean Whether layer is visible
+---@field stencil boolean Whether layer supports stencil operations
+---@field effects love.Shader[] Array of shader effects to apply
+---@field blendMode love.BlendMode Blend mode for the layer
+---@field maskLayer string|nil Name of layer to use as mask
+
+--- Creates mask shader for layer masking
 local function createMaskShader()
   state.maskShader = love.graphics.newShader[[
     vec4 effect(vec4 color, Image tex, vec2 texCoord, vec2 screenCoord) {
@@ -40,6 +72,7 @@ local function createMaskShader()
   ]]
 end
 
+--- Calculate transformation values based on current settings
 local function calculateTransforms()
   -- Calculate initial scale factors (used by most modes)
   state.scale_x = state.screen_width / state.viewport_width
@@ -85,7 +118,17 @@ local function calculateTransforms()
   end
 end
 
--- Layer management functions
+---@class ShoveLayerOptions
+---@field zIndex? number Z-order index (optional)
+---@field visible? boolean Whether layer is visible (default: true)
+---@field stencil? boolean Whether layer supports stencil operations (default: false)
+---@field effects? love.Shader[] Effects to apply to the layer (optional)
+---@field blendMode? love.BlendMode Blend mode for the layer (default: "alpha")
+
+--- Create a new layer or return existing one
+---@param name string Layer name
+---@param options? ShoveLayerOptions Layer configuration options
+---@return ShoveLayer layer The created or existing layer
 local function createLayer(name, options)
   options = options or {}
 
@@ -116,10 +159,16 @@ local function createLayer(name, options)
   return layer
 end
 
+--- Get a layer by name
+---@param name string Layer name
+---@return ShoveLayer|nil layer The requested layer or nil if not found
 local function getLayer(name)
   return state.layers.byName[name]
 end
 
+--- Set the currently active layer
+---@param name string Layer name
+---@return boolean success Whether the layer was found and set active
 local function setActiveLayer(name)
   local layer = getLayer(name)
   if not layer then
@@ -131,6 +180,8 @@ local function setActiveLayer(name)
   return true
 end
 
+--- Create the composite layer used for final output
+---@return ShoveLayer composite The composite layer
 local function createCompositeLayer()
   local composite = {
     name = "_composite",
@@ -144,6 +195,9 @@ local function createCompositeLayer()
   return composite
 end
 
+--- Apply a set of shader effects to a canvas
+---@param canvas love.Canvas Canvas to apply effects to
+---@param effects love.Shader[] Array of shader effects
 local function applyEffects(canvas, effects)
   if not effects or #effects == 0 then
     love.graphics.draw(canvas)
@@ -187,7 +241,9 @@ local function applyEffects(canvas, effects)
   love.graphics.setShader(shader)
 end
 
--- Enhanced layer rendering functions
+--- Begin drawing to a specific layer
+---@param name string Layer name
+---@return boolean success Whether the layer was successfully activated
 local function beginLayerDraw(name)
   if state.renderMode ~= "layer" then
     return false
@@ -206,6 +262,8 @@ local function beginLayerDraw(name)
   return true
 end
 
+--- End drawing to the current layer
+---@return boolean success Whether the layer was successfully deactivated
 local function endLayerDraw()
   -- Simply mark that we're done with this layer
   if state.renderMode == "layer" and state.inDrawMode then
@@ -216,6 +274,9 @@ local function endLayerDraw()
   return false
 end
 
+--- Composite all layers to screen
+---@param globalEffects love.Shader[]|nil Optional effects to apply globally
+---@return boolean success Whether compositing was performed
 local function compositeLayersToScreen(globalEffects)
   if state.renderMode ~= "layer" then
     return false
@@ -288,7 +349,10 @@ local function compositeLayersToScreen(globalEffects)
   return true
 end
 
--- Enhanced effect management functions
+--- Add an effect to a layer
+---@param layer ShoveLayer Layer to add effect to
+---@param effect love.Shader Shader effect to add
+---@return boolean success Whether the effect was added
 local function addEffect(layer, effect)
   if layer and effect then
     table.insert(layer.effects, effect)
@@ -297,6 +361,10 @@ local function addEffect(layer, effect)
   return false
 end
 
+--- Remove an effect from a layer
+---@param layer ShoveLayer Layer to remove effect from
+---@param effect love.Shader Shader effect to remove
+---@return boolean success Whether the effect was removed
 local function removeEffect(layer, effect)
   if not layer or not effect then return false end
 
@@ -310,6 +378,9 @@ local function removeEffect(layer, effect)
   return false
 end
 
+--- Clear all effects from a layer
+---@param layer ShoveLayer Layer to clear effects from
+---@return boolean success Whether effects were cleared
 local function clearEffects(layer)
   if layer then
     layer.effects = {}
@@ -318,8 +389,16 @@ local function clearEffects(layer)
   return false
 end
 
--- Public API
-return {
+---@class Shove
+local shove = {
+  ---@class ShoveInitOptions
+  ---@field fitMethod? "aspect"|"pixel"|"stretch"|"none" Scaling method
+  ---@field renderMode? "direct"|"layer" Rendering approach
+
+  --- Initialize the resolution system
+  ---@param width number Viewport width
+  ---@param height number Viewport height
+  ---@param settingsTable? ShoveInitOptions Configuration options
   initResolution = function(width, height, settingsTable)
     -- Clear previous state
     state.layers.byName = {}
@@ -355,6 +434,7 @@ return {
     end
   end,
 
+  --- Begin drawing operations
   beginDraw = function()
     -- Set flag to indicate we're in drawing mode
     state.inDrawMode = true
@@ -383,6 +463,8 @@ return {
     end
   end,
 
+  --- End drawing operations and display result
+  ---@param globalEffects love.Shader[]|nil Optional effects to apply globally
   endDraw = function(globalEffects)
     if state.renderMode == "layer" then
       -- Ensure active layer is finished
@@ -417,10 +499,18 @@ return {
   end,
 
   -- Layer management API
+
+  --- Create a new layer
+  ---@param name string Layer name
+  ---@param options? ShoveLayerOptions Layer configuration options
+  ---@return ShoveLayer layer The created layer
   createLayer = function(name, options)
     return createLayer(name, options)
   end,
 
+  --- Remove a layer
+  ---@param name string Layer name
+  ---@return boolean success Whether layer was removed
   removeLayer = function(name)
     if name == "_composite" or not state.layers.byName[name] then
       return false
@@ -443,10 +533,17 @@ return {
     return true
   end,
 
+  --- Check if a layer exists
+  ---@param name string Layer name
+  ---@return boolean exists Whether the layer exists
   layerExists = function(name)
     return state.layers.byName[name] ~= nil
   end,
 
+  --- Set the z-index order of a layer
+  ---@param name string Layer name
+  ---@param zIndex number Z-order position
+  ---@return boolean success Whether the layer order was changed
   setLayerOrder = function(name, zIndex)
     local layer = getLayer(name)
     if not layer or name == "_composite" then
@@ -463,6 +560,10 @@ return {
     return true
   end,
 
+  --- Set layer visibility
+  ---@param name string Layer name
+  ---@param isVisible boolean Whether the layer should be visible
+  ---@return boolean success Whether the layer visibility was changed
   setLayerVisible = function(name, isVisible)
     local layer = getLayer(name)
     if not layer then
@@ -473,6 +574,10 @@ return {
     return true
   end,
 
+  --- Set a mask for a layer
+  ---@param name string Layer name
+  ---@param maskName string|nil Name of layer to use as mask, or nil to clear mask
+  ---@return boolean success Whether the mask was set
   setLayerMask = function(name, maskName)
     local layer = getLayer(name)
     if not layer then
@@ -493,20 +598,31 @@ return {
     return true
   end,
 
+  --- Begin drawing to a layer
+  ---@param name string Layer name
+  ---@return boolean success Whether the layer was activated
   beginLayer = function(name)
     return beginLayerDraw(name)
   end,
 
+  --- End drawing to current layer
+  ---@return boolean success Whether the layer was deactivated
   endLayer = function()
     return endLayerDraw()
   end,
 
+  --- Composite and draw layers
+  ---@param globalEffects love.Shader[]|nil Optional effects to apply globally
+  ---@return boolean success Whether compositing was performed
   compositeAndDraw = function(globalEffects)
     -- This allows manually compositing layers at any point
     return compositeLayersToScreen(globalEffects)
   end,
 
-  -- Drawing helper functions
+  --- Draw to a specific layer using a callback function
+  ---@param name string Layer name
+  ---@param drawFunc function Callback function to execute for drawing
+  ---@return boolean success Whether drawing was performed
   drawToLayer = function(name, drawFunc)
     if state.renderMode ~= "layer" or not state.inDrawMode then
       return false
@@ -531,26 +647,38 @@ return {
     return true
   end,
 
-  -- Effect management API
+  --- Add an effect to a layer
+  ---@param layerName string Layer name
+  ---@param effect love.Shader Shader effect to add
+  ---@return boolean success Whether the effect was added
   addEffect = function(layerName, effect)
     local layer = getLayer(layerName)
     if not layer then return false end
     return addEffect(layer, effect)
   end,
 
+  --- Remove an effect from a layer
+  ---@param layerName string Layer name
+  ---@param effect love.Shader Shader effect to remove
+  ---@return boolean success Whether the effect was removed
   removeEffect = function(layerName, effect)
     local layer = getLayer(layerName)
     if not layer then return false end
     return removeEffect(layer, effect)
   end,
 
+  --- Clear all effects from a layer
+  ---@param layerName string Layer name
+  ---@return boolean success Whether effects were cleared
   clearEffects = function(layerName)
     local layer = getLayer(layerName)
     if not layer then return false end
     return clearEffects(layer)
   end,
 
-  -- Global effects management
+  --- Add a global effect
+  ---@param effect love.Shader Shader effect to add globally
+  ---@return boolean success Whether the effect was added
   addGlobalEffect = function(effect)
     if not state.layers.composite then
       createCompositeLayer()
@@ -558,17 +686,27 @@ return {
     return addEffect(state.layers.composite, effect)
   end,
 
+  --- Remove a global effect
+  ---@param effect love.Shader Shader effect to remove
+  ---@return boolean success Whether the effect was removed
   removeGlobalEffect = function(effect)
     if not state.layers.composite then return false end
     return removeEffect(state.layers.composite, effect)
   end,
 
+  --- Clear all global effects
+  ---@return boolean success Whether effects were cleared
   clearGlobalEffects = function()
     if not state.layers.composite then return false end
     return clearEffects(state.layers.composite)
   end,
 
-  -- Convert coordinates from screen to game viewport coordinates
+  --- Convert screen coordinates to viewport coordinates
+  ---@param x number Screen X coordinate
+  ---@param y number Screen Y coordinate
+  ---@return boolean inside Whether coordinates are inside viewport
+  ---@return number viewX Viewport X coordinate
+  ---@return number viewY Viewport Y coordinate
   toViewport = function(x, y)
     x, y = x - state.offset_x, y - state.offset_y
     local normalX, normalY = x / state.rendered_width, y / state.rendered_height
@@ -581,38 +719,59 @@ return {
     return isInside, viewportX, viewportY
   end,
 
-  -- Convert coordinates from game viewport to screen coordinates
+  --- Convert viewport coordinates to screen coordinates
+  ---@param x number Viewport X coordinate
+  ---@param y number Viewport Y coordinate
+  ---@return number screenX Screen X coordinate
+  ---@return number screenY Screen Y coordinate
   toScreen = function(x, y)
     local screenX = state.offset_x + (state.rendered_width * x) / state.viewport_width
     local screenY = state.offset_y + (state.rendered_height * y) / state.viewport_height
     return screenX, screenY
   end,
 
-  -- Convert mouse screen coordinates to game viewport coordinates
+  --- Convert mouse position to viewport coordinates
+  ---@return boolean inside Whether mouse is inside viewport
+  ---@return number mouseX Viewport X coordinate
+  ---@return number mouseY Viewport Y coordinate
   mouseToViewport = function()
     local mouseX, mouseY = love.mouse.getPosition()
     return shove.toViewport(mouseX, mouseY)
   end,
 
+  --- Update dimensions when window is resized
+  ---@param width number New window width
+  ---@param height number New window height
   resize = function(width, height)
     state.screen_width = width
     state.screen_height = height
     calculateTransforms()
   end,
 
+  --- Get viewport width
+  ---@return number width Viewport width
   getViewportWidth = function()
     return state.viewport_width
   end,
 
+  --- Get viewport height
+  ---@return number height Viewport height
   getViewportHeight = function()
     return state.viewport_height
   end,
 
+  --- Get viewport dimensions
+  ---@return number width Viewport width
+  ---@return number height Viewport height
   getViewportDimensions = function()
     return state.viewport_width, state.viewport_height
   end,
 
-  -- Returns the game viewport rectangle in screen coordinates
+  --- Get the game viewport rectangle in screen coordinates
+  ---@return number x Left position
+  ---@return number y Top position
+  ---@return number width Width in screen pixels
+  ---@return number height Height in screen pixels
   getViewport = function()
     local x = state.offset_x
     local y = state.offset_y
@@ -621,7 +780,10 @@ return {
     return x, y, width, height
   end,
 
-  -- Check if screen coordinates are within the game viewport
+  --- Check if screen coordinates are within the game viewport
+  ---@param x number Screen X coordinate
+  ---@param y number Screen Y coordinate
+  ---@return boolean inside Whether coordinates are inside viewport
   inViewport = function(x, y)
     -- If stretch scaling is in use, coords are always in the viewport
     if state.fitMethod == "stretch" then
@@ -636,3 +798,5 @@ return {
            y >= viewY and y < viewY + viewHeight
   end,
 }
+
+return shove
