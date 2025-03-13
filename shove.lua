@@ -21,8 +21,24 @@ local state = {
     ordered = {},   -- Ordered array for rendering sequence
     active = nil,   -- Currently active layer for drawing
     composite = nil -- Final composite layer for output
-  }
+  },
+  -- Shader for masking
+  maskShader = nil
 }
+
+-- Create mask shader for layer masking
+local function createMaskShader()
+  state.maskShader = love.graphics.newShader[[
+    vec4 effect(vec4 color, Image tex, vec2 texCoord, vec2 screenCoord) {
+      vec4 pixel = Texel(tex, texCoord);
+      // Discard transparent or nearly transparent pixels
+      if (pixel.a < 0.01) {
+        discard;
+      }
+      return vec4(1.0);
+    }
+  ]]
+end
 
 local function calculateTransforms()
   -- Calculate initial scale factors (used by most modes)
@@ -210,8 +226,13 @@ local function compositeLayersToScreen(globalEffects)
     createCompositeLayer()
   end
 
-  -- Prepare composite
-  love.graphics.setCanvas(state.layers.composite.canvas)
+  -- Create mask shader if it doesn't exist
+  if not state.maskShader then
+    createMaskShader()
+  end
+
+  -- Prepare composite - add stencil=true to enable stencil operations
+  love.graphics.setCanvas({ state.layers.composite.canvas, stencil = true })
   love.graphics.clear()
 
   -- Draw all visible layers in order
@@ -221,10 +242,16 @@ local function compositeLayersToScreen(globalEffects)
       if layer.maskLayer then
         local maskLayer = getLayer(layer.maskLayer)
         if maskLayer then
+          -- Clear stencil buffer first
+          love.graphics.clear(false, false, true)
           love.graphics.stencil(function()
+            -- Use mask shader to properly handle transparent pixels
+            love.graphics.setShader(state.maskShader)
             love.graphics.draw(maskLayer.canvas)
+            love.graphics.setShader()
           end, "replace", 1)
-          love.graphics.setStencilTest("greater", 0)
+          -- Only draw where stencil value equals 1
+          love.graphics.setStencilTest("equal", 1)
         end
       end
 
@@ -299,6 +326,7 @@ return {
     state.layers.ordered = {}
     state.layers.active = nil
     state.layers.composite = nil
+    state.maskShader = nil
 
     state.viewport_width = width
     state.viewport_height = height
@@ -313,6 +341,9 @@ return {
     end
 
     calculateTransforms()
+
+    -- Initialize mask shader
+    createMaskShader()
 
     -- Initialize layer system for buffer mode
     if state.renderMode == "layer" then
@@ -454,6 +485,7 @@ return {
         return false
       end
       layer.maskLayer = maskName
+      layer.stencil = true
     else
       layer.maskLayer = nil
     end
