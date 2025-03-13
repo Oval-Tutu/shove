@@ -8,6 +8,7 @@ local examples = {
   "mouse-input",
   "canvases-shaders",
   "stencil",
+  "mask",
 }
 local example = 1
 
