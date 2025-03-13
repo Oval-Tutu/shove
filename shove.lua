@@ -600,6 +600,15 @@ local shove = {
     return true
   end,
 
+  --- Check if a layer is visible
+  ---@param name string Layer name
+  ---@return boolean|nil isVisible Whether the layer is visible, or nil if layer doesn't exist
+  isLayerVisible = function(name)
+    local layer = getLayer(name)
+    if not layer then return nil end
+    return layer.visible
+  end,
+
   --- Set a mask for a layer
   ---@param name string Layer name
   ---@param maskName string|nil Name of layer to use as mask, or nil to clear mask
