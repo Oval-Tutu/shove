@@ -276,8 +276,9 @@ end
 
 --- Composite all layers to screen
 ---@param globalEffects love.Shader[]|nil Optional effects to apply globally
+---@param applyPersistentEffects boolean Whether to apply persistent global effects
 ---@return boolean success Whether compositing was performed
-local function compositeLayersToScreen(globalEffects)
+local function compositeLayersToScreen(globalEffects, applyPersistentEffects)
   if state.renderMode ~= "layer" then
     return false
   end
@@ -337,7 +338,23 @@ local function compositeLayersToScreen(globalEffects)
   love.graphics.translate(state.offset_x, state.offset_y)
   love.graphics.push()
     love.graphics.scale(state.scale_x, state.scale_y)
-    local effects = globalEffects or state.layers.composite.effects
+    local effects = {}
+    -- Only apply persistent global effects when requested
+    if applyPersistentEffects then
+      -- Start with persistent effects if available
+      if state.layers.composite and #state.layers.composite.effects > 0 then
+        for _, effect in ipairs(state.layers.composite.effects) do
+          table.insert(effects, effect)
+        end
+      end
+    end
+    -- Append any transient effects
+    if globalEffects and type(globalEffects) == "table" and #globalEffects > 0 then
+      for _, effect in ipairs(globalEffects) do
+        table.insert(effects, effect)
+      end
+    end
+
     if effects and #effects > 0 then
       applyEffects(state.layers.composite.canvas, effects)
     else
@@ -472,8 +489,8 @@ local shove = {
         endLayerDraw()
       end
 
-      -- Composite and draw layers to screen
-      compositeLayersToScreen(globalEffects)
+      -- Composite and draw layers to screen (always apply global persistent effects in endDraw)
+      compositeLayersToScreen(globalEffects, true)
       love.graphics.pop()
 
       -- Clear all layer canvases
@@ -612,11 +629,12 @@ local shove = {
   end,
 
   --- Composite and draw layers
-  ---@param globalEffects love.Shader[]|nil Optional effects to apply globally
+  ---@param globalEffects love.Shader[]|nil Optional effects to apply globally for this draw
+  ---@param applyPersistentEffects boolean|nil Whether to apply persistent global effects (default: false)
   ---@return boolean success Whether compositing was performed
-  compositeAndDraw = function(globalEffects)
-    -- This allows manually compositing layers at any point
-    return compositeLayersToScreen(globalEffects)
+  compositeAndDraw = function(globalEffects, applyPersistentEffects)
+    -- This allows manually compositing layers at any point with optional effect control
+    return compositeLayersToScreen(globalEffects, applyPersistentEffects or false)
   end,
 
   --- Draw to a specific layer using a callback function
