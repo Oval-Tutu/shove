@@ -577,6 +577,15 @@ local shove = {
     return true
   end,
 
+  --- Get the z-index order of a layer
+  ---@param name string Layer name
+  ---@return number|nil zIndex Z-order position, or nil if layer doesn't exist
+  getLayerOrder = function(name)
+    local layer = getLayer(name)
+    if not layer then return nil end
+    return layer.zIndex
+  end,
+
   --- Set layer visibility
   ---@param name string Layer name
   ---@param isVisible boolean Whether the layer should be visible
