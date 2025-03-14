@@ -1,8 +1,8 @@
 return function()
   function love.load()
     local windowWidth, windowHeight = love.window.getDesktopDimensions()
-    love.window.setMode(windowWidth * 0.5, windowHeight * 0.5, { fullscreen = false, resizable = true })
     shove.initResolution(960, 540, { renderMode = "layer" })
+    shove.setMode(windowWidth * 0.5, windowHeight * 0.5, { fullscreen = false, resizable = true })
     image = love.graphics.newImage("single-shader/love.png")
     shader = love.graphics.newShader("single-shader/shader.glsl")
 
