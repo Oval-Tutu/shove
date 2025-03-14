@@ -1,34 +1,34 @@
 return function()
-  -- LÖVE resolution 640x480, resizable
-  love.window.setMode(640, 480, { resizable = true })
-  -- shove resolution 64x64, pixel perfect scaling, drawn to a canvas
-  shove.initResolution(64, 64, { fitMethod = "pixel", renderMode = "layer" })
-
   function love.load()
-    time = 0
+    local windowWidth, windowHeight = love.window.getDesktopDimensions()
+    love.window.setMode(windowWidth * 0.5, windowHeight * 0.5, { fullscreen = false, resizable = true })
     love.mouse.setVisible(false)
+    shove.initResolution(64, 64, { fitMethod = "pixel", renderMode = "layer" })
     love.graphics.setNewFont(16)
     image = love.graphics.newImage("low-res/image.png")
+    shove.createLayer("background", { zIndex = 10 })
+    shove.createLayer("animation", { zIndex = 20 })
+    shove.createLayer("cursor", { zIndex = 30 })
+    abs, pi, time = 0, 0, 0
+    w = shove.getViewportWidth()
   end
 
   function love.update(dt)
     time = (time + dt) % 1
+    abs = math.abs(time - 0.5)
+    pi = math.cos(math.pi * 2 * time)
+    w = shove.getViewportWidth()
   end
 
   function love.draw()
     shove.beginDraw()
-      love.graphics.setBackgroundColor(0, 0, 0)
-      -- Draw background image
-      shove.beginLayer("image")
+      shove.beginLayer("background")
+        love.graphics.setBackgroundColor(0, 0, 0)
         love.graphics.draw(image, 0, 0)
       shove.endLayer()
 
-      -- Animated "Hi!" text
-      local abs = math.abs(time - 0.5)
-      local pi = math.cos(math.pi * 2 * time)
-      local w = shove.getViewportWidth()
       shove.beginLayer("animation")
-        love.graphics.setColor(0, 0, 0, 0.5)
+        love.graphics.setColor(0, 0, 0, 0.75)
         love.graphics.printf(
           "Hi!",
           31,
@@ -56,27 +56,28 @@ return function()
         )
       shove.endLayer()
 
-      -- Draw cursor
       local insideViewport, mouseX, mouseY = shove.mouseToViewport()
-      if insideViewport then
-        shove.beginLayer("cursor")
-          love.graphics.setColor(1, 1, 1)
-          if mouseX and mouseY then
-            love.graphics.points(
-              mouseX,
-              mouseY - 1,
-              mouseX - 1,
-              mouseY,
-              mouseX,
-              mouseY,
-              mouseX + 1,
-              mouseY,
-              mouseX,
-              mouseY + 1
-            )
-          end
-        shove.endLayer()
-      end
+      -- If outside the viewport hide the cursor layer
+      -- Invisible layers do not get rendered
+      shove.setLayerVisible("cursor", insideViewport)
+
+      shove.beginLayer("cursor")
+        love.graphics.setColor(0, 0, 0, 0.85)
+        love.graphics.printf("LÖVE", 2, 48, w, "center")
+        love.graphics.setColor(1, 1, 1)
+        love.graphics.points(
+          mouseX,
+          mouseY - 1,
+          mouseX - 1,
+          mouseY,
+          mouseX,
+          mouseY,
+          mouseX + 1,
+          mouseY,
+          mouseX,
+          mouseY + 1
+        )
+      shove.endLayer()
     shove.endDraw()
   end
 end

@@ -1,24 +1,15 @@
 return function()
-  local gameWidth, gameHeight = 64, 64
-
-  local windowWidth, windowHeight = love.window.getDesktopDimensions()
-  windowWidth, windowHeight = windowWidth * 0.5, windowHeight * 0.5
-
-  love.window.setMode(windowWidth, windowHeight, { fullscreen = false, resizable = true })
-  shove.initResolution(gameWidth, gameHeight, { fitMethod = "pixel", renderMode = "layer" })
-
-  -- Create layers
-  shove.createLayer("main_canvas", {zIndex = 50})
-  shove.createLayer("stencil_canvas", {stencil = true})
-
   function love.load()
-    time = 0
-    love.graphics.setNewFont(32)
-    background = love.graphics.newImage("low-res/image.png")
-  end
+    local windowWidth, windowHeight = love.window.getDesktopDimensions()
+    love.window.setMode(windowWidth * 0.5, windowHeight * 0.5, { fullscreen = false, resizable = true })
+    shove.initResolution(960, 540, { fitMethod = "aspect", renderMode = "layer" })
+    nogame = love.graphics.newImage("stencil/nogame.png")
 
-  function love.update(dt)
-    time = (time + dt) % 1
+    shove.createLayer("background", { zIndex = 10 })
+    -- If you want to use manually use the stencil buffer in a layer then
+    -- create the layer with stencil flag set before calling beginLayer
+    shove.createLayer("stencil", { stencil = true }, { zIndex = 20 })
+    shove.createLayer("cursor", { zIndex = 30 })
   end
 
   function love.draw()
@@ -26,42 +17,33 @@ return function()
       shove.beginLayer("background")
         love.graphics.setBackgroundColor(0, 0, 0)
       shove.endLayer()
-      shove.beginLayer("stencil_canvas")
+
+      shove.beginLayer("stencil")
         love.graphics.stencil(function()
           love.graphics.setColor(1, 1, 1)
-          local time = love.timer.getTime() * 3
+          local time = love.timer.getTime() * 1.5
           love.graphics.circle(
             "fill",
-            shove.getViewportWidth() * 0.5 + math.cos(time) * 20,
-            shove.getViewportHeight() * 0.5 + math.sin(time) * 20,
-            10 + math.sin(time) * 2
+            shove.getViewportWidth() * 0.5 + math.cos(time) * 320,
+            shove.getViewportHeight() * 0.5 + math.sin(time) * 50,
+            150 + math.sin(time) * 64
           )
         end, "replace", 1)
 
-        -- Draw background with stencil
+        -- Draw background with stencil mask
         love.graphics.setStencilTest("greater", 0)
-        love.graphics.draw(background, 0, 0)
+        love.graphics.draw(nogame, 0, 0)
         love.graphics.setStencilTest()
       shove.endLayer()
 
-      -- Draw cursor on a different layer
-      shove.beginLayer("main_canvas")
+      local insideViewport, mouseX, mouseY = shove.mouseToViewport()
+      -- If outside the viewport hide the cursor layer
+      -- Invisible layers do not get rendered
+      shove.setLayerVisible("cursor", insideViewport)
+
+      shove.beginLayer("cursor")
         love.graphics.setColor(1, 1, 1)
-        local insideViewport, mouseX, mouseY = shove.mouseToViewport()
-        if insideViewport then
-          love.graphics.points(
-            mouseX,
-            mouseY - 1,
-            mouseX - 1,
-            mouseY,
-            mouseX,
-            mouseY,
-            mouseX + 1,
-            mouseY,
-            mouseX,
-            mouseY + 1
-          )
-        end
+        love.graphics.circle("fill", mouseX, mouseY, 16)
       shove.endLayer()
     shove.endDraw()
   end
