@@ -38,7 +38,11 @@ return function()
       local insideViewport, mouseX, mouseY = shove.mouseToViewport()
       -- If outside the viewport hide the cursor layer
       -- Invisible layers do not get rendered
-      shove.setLayerVisible("cursor", insideViewport)
+      if insideViewport then
+        shove.showLayer("cursor")
+      else
+        shove.hideLayer("cursor")
+      end
 
       shove.beginLayer("cursor")
         love.graphics.setColor(1, 1, 1)

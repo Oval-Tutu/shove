@@ -818,21 +818,16 @@ local shove = {
     return layer.zIndex
   end,
 
-  --- Set layer visibility
-  ---@param name string Layer name
-  ---@param isVisible boolean Whether the layer should be visible
-  ---@return boolean success Whether the layer visibility was changed
-  setLayerVisible = function(name, isVisible)
+--- Show a layer (make it visible)
+---@param name string Layer name
+---@return boolean success Whether the layer visibility was changed
+  showLayer = function(name)
     if type(name) ~= "string" then
-      error("shove.setLayerVisible: name must be a string", 2)
+      error("shove.showLayer: name must be a string", 2)
     end
 
     if name == "" then
-      error("shove.setLayerVisible: name cannot be empty", 2)
-    end
-
-    if type(isVisible) ~= "boolean" then
-      error("shove.setLayerVisible: isVisible must be a boolean", 2)
+      error("shove.showLayer: name cannot be empty", 2)
     end
 
     local layer = getLayer(name)
@@ -840,7 +835,28 @@ local shove = {
       return false
     end
 
-    layer.visible = isVisible
+    layer.visible = true
+    return true
+  end,
+
+--- Hide a layer (make it invisible)
+---@param name string Layer name
+---@return boolean success Whether the layer visibility was changed
+  hideLayer = function(name)
+    if type(name) ~= "string" then
+      error("shove.hideLayer: name must be a string", 2)
+    end
+
+    if name == "" then
+      error("shove.hideLayer: name cannot be empty", 2)
+    end
+
+    local layer = getLayer(name)
+    if not layer then
+      return false
+    end
+
+    layer.visible = false
     return true
   end,
 

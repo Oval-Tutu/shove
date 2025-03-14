@@ -265,7 +265,11 @@ shove.beginDraw()
     drawUI()
   shove.endLayer()
 
-  shove.setLayerVisible("debug", debugMode)
+  if debugMode then
+    shove.showLayer("debug")
+  else
+    shove.hideLayer("debug")
+  end
   shove.beginLayer("debug")
     drawDebugInfo() -- Only rendered when debugMode is true
   shove.endLayer()
@@ -911,7 +915,8 @@ end
 - `shove.getLayerOrder(name)` - Get layer drawing order
 - `shove.setLayerOrder(name, zIndex)` - Set layer drawing order
 - `shove.isLayerVisible(name)` - Check if a layer is visible
-- `shove.setLayerVisible(name, isVisible)` - Toggle layer visibility
+- `shove.hideLayer(name)` - Hide a layer
+- `shove.showLayer(name)` - Show a layer
 - `shove.setLayerMask(name, maskName)` - Set a layer as a mask
 - `shove.drawToLayer(name, drawFunc)` - Draw to a layer with a callback
 - `shove.compositeAndDraw(globalEffects, applyPersistentEffects)` - Composite and draw the current state
