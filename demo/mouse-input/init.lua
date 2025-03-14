@@ -9,7 +9,7 @@ return function()
 
   function love.draw()
     local shoveWidth, shoveHeight = shove.getViewportDimensions()
-    local mouseInViewport, mouseX, mouseY = shove.getMouseInViewport()
+    local mouseInViewport, mouseX, mouseY = shove.mouseToViewport()
     local color = mouseInViewport and { 0, 1, 0, 0.5 } or { 1, 0, 0, 0.5 }
     shove.beginDraw()
       love.graphics.setBackgroundColor(0, 0, 0)
