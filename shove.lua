@@ -41,7 +41,8 @@ local state = {
     composite = nil -- Final composite layer for output
   },
   -- Shader for masking
-  maskShader = nil
+  maskShader = nil,
+  resizeCallback = nil,
 }
 
 ---@class ShoveLayerSystem
@@ -791,6 +792,10 @@ local shove = {
     state.screen_width = width
     state.screen_height = height
     calculateTransforms()
+    -- Call resize callback if it exists
+    if type(state.resizeCallback) == "function" then
+      state.resizeCallback(width, height)
+    end
   end,
 
   --- Get viewport width
@@ -1100,6 +1105,25 @@ local shove = {
       -- Show basic debug info when F4 is pressed
       shove.debugInfo(debugX, debugY)
     end
+  end,
+
+--- Set a callback function to be called after resize operations
+---@param callback function|nil Function to call after each resize, or nil to clear
+---@return boolean success Whether the callback was set successfully
+  setResizeCallback = function(callback)
+    if type(callback) == "function" or callback == nil then
+      state.resizeCallback = callback
+      return true
+    else
+      error("setResizeCallback: Expected function or nil, got " .. type(callback))
+      return false
+    end
+  end,
+
+--- Get the current resize callback function
+---@return function|nil callback The current resize callback or nil if none is set
+  getResizeCallback = function()
+    return state.resizeCallback
   end,
 }
 
