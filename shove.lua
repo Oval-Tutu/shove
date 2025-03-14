@@ -441,6 +441,13 @@ end
 
 ---@class Shove
 local shove = {
+  --- Version
+  _VERSION = {
+    major = 1,
+    minor = 0,
+    patch = 2,
+    string = "1.0.2"
+  },
   --- Blend mode constants
   BLEND = {
     ALPHA = "alpha",
@@ -1470,7 +1477,7 @@ local shove = {
 
     -- Header
     love.graphics.setColor(0.7, 0.9, 1, 1)
-    love.graphics.print("Shöve", x + 10, y + 10)
+    love.graphics.print("Shöve " .. shove._VERSION.string, x + 10, y + 10)
 
     -- Reset text color
     love.graphics.setColor(1, 1, 1, 1)
