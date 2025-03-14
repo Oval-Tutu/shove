@@ -911,7 +911,7 @@ end
 - `shove.endLayer()` - Finish drawing to a layer
 - `shove.createLayer(name, options)` - Create a new layer
 - `shove.removeLayer(name)` - Remove a layer
-- `shove.layerExists(name)` - Check if a layer exists
+- `shove.hasLayer(name)` - Check if a layer exists
 - `shove.getLayerOrder(name)` - Get layer drawing order
 - `shove.setLayerOrder(name, zIndex)` - Set layer drawing order
 - `shove.isLayerVisible(name)` - Check if a layer is visible
