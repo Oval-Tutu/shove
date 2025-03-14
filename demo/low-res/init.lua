@@ -56,9 +56,8 @@ return function()
         )
       shove.endLayer()
 
+      -- Check if mouse is within the game area
       local mouseInViewport, mouseX, mouseY = shove.mouseToViewport()
-      -- If outside the viewport hide the cursor layer
-      -- Invisible layers do not get rendered
       if mouseInViewport then
         shove.showLayer("cursor")
       else
@@ -67,20 +66,11 @@ return function()
 
       shove.beginLayer("cursor")
         love.graphics.setColor(0, 0, 0, 0.85)
-        love.graphics.printf("LÖVE", 2, 48, w, "center")
+        love.graphics.printf("SHÖVE", 2, 48, w, "center")
         love.graphics.setColor(1, 1, 1)
-        love.graphics.points(
-          mouseX,
-          mouseY - 1,
-          mouseX - 1,
-          mouseY,
-          mouseX,
-          mouseY,
-          mouseX + 1,
-          mouseY,
-          mouseX,
-          mouseY + 1
-        )
+        local cursorSize = 1
+        love.graphics.rectangle("fill", mouseX - cursorSize, mouseY, cursorSize * 2 + 1, 1)
+        love.graphics.rectangle("fill", mouseX, mouseY - cursorSize, 1, cursorSize * 2 + 1)
       shove.endLayer()
     shove.endDraw()
     shove.handleDebugKeys()
