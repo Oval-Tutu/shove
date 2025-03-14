@@ -552,17 +552,17 @@ local shove = {
 ---@param flags table|nil Window flags (resizable, fullscreen, etc.)
 ---@return boolean success Whether the mode was set successfully
 ---@return string|nil error Error message if unsuccessful
-  setMode = function(width, height, flags)
+  setWindowMode = function(width, height, flags)
     if type(width) ~= "number" or width <= 0 then
-      error("shove.setMode: width must be a positive number", 2)
+      error("shove.setWindowMode: width must be a positive number", 2)
     end
 
     if type(height) ~= "number" or height <= 0 then
-      error("shove.setMode: height must be a positive number", 2)
+      error("shove.setWindowMode: height must be a positive number", 2)
     end
 
     if flags ~= nil and type(flags) ~= "table" then
-      error("shove.setMode: flags must be a table or nil", 2)
+      error("shove.setWindowMode: flags must be a table or nil", 2)
     end
 
     local success, message = love.window.setMode(width, height, flags)
@@ -584,20 +584,20 @@ local shove = {
 ---@param flags table|nil Window flags (resizable, fullscreen, etc.)
 ---@return boolean success Whether the mode was updated successfully
 ---@return string|nil error Error message if unsuccessful
-  updateMode = function(width, height, flags)
+  updateWindowMode = function(width, height, flags)
     if type(width) ~= "number" or width <= 0 then
-      error("shove.updateMode: width must be a positive number", 2)
+      error("shove.updateWindowMode: width must be a positive number", 2)
     end
 
     if type(height) ~= "number" or height <= 0 then
-      error("shove.updateMode: height must be a positive number", 2)
+      error("shove.updateWindowMode: height must be a positive number", 2)
     end
 
     if flags ~= nil and type(flags) ~= "table" then
-      error("shove.updateMode: flags must be a table or nil", 2)
+      error("shove.updateWindowMode: flags must be a table or nil", 2)
     end
 
-    local success, message = love.window.updateMode(width, height, flags)
+    local success, message = love.window.updateWindowMode(width, height, flags)
 
     if success then
       -- Get the actual dimensions (might differ from requested)
