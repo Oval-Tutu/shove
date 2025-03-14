@@ -14,6 +14,7 @@
 ---@field offset_y number Vertical offset for centering
 ---@field layers ShoveLayerSystem Layer management system
 ---@field maskShader love.Shader Shader used for layer masking
+---@field resizeCallback function Callback function for window resize
 ---@field inDrawMode boolean Whether we're currently in drawing mode
 -- Internal state variables
 local state = {
@@ -282,6 +283,14 @@ end
 ---@param applyPersistentEffects boolean Whether to apply persistent global effects
 ---@return boolean success Whether compositing was performed
 local function compositeLayersToScreen(globalEffects, applyPersistentEffects)
+  if globalEffects ~= nil and type(globalEffects) ~= "table" then
+    error("compositeLayersToScreen: globalEffects must be a table of shaders or nil", 2)
+  end
+
+  if type(applyPersistentEffects) ~= "boolean" then
+    error("compositeLayersToScreen: applyPersistentEffects must be a boolean", 2)
+  end
+
   if state.renderMode ~= "layer" then
     return false
   end
@@ -352,7 +361,7 @@ local function compositeLayersToScreen(globalEffects, applyPersistentEffects)
       end
     end
     -- Append any transient effects
-    if globalEffects and type(globalEffects) == "table" and #globalEffects > 0 then
+    if globalEffects and #globalEffects > 0 then
       for _, effect in ipairs(globalEffects) do
         table.insert(effects, effect)
       end
@@ -421,6 +430,45 @@ local shove = {
   ---@param height number Viewport height
   ---@param settingsTable? ShoveInitOptions Configuration options
   initResolution = function(width, height, settingsTable)
+    if type(width) ~= "number" or width <= 0 then
+      error("shove.initResolution: width must be a positive number", 2)
+    end
+
+    if type(height) ~= "number" or height <= 0 then
+      error("shove.initResolution: height must be a positive number", 2)
+    end
+
+    if settingsTable ~= nil and type(settingsTable) ~= "table" then
+      error("shove.initResolution: settingsTable must be a table or nil", 2)
+    end
+
+    -- Validate settings if provided
+    if type(settingsTable) == "table" then
+      -- Validate fitMethod
+      if settingsTable.fitMethod ~= nil and
+         settingsTable.fitMethod ~= "aspect" and
+         settingsTable.fitMethod ~= "pixel" and
+         settingsTable.fitMethod ~= "stretch" and
+         settingsTable.fitMethod ~= "none" then
+        error("shove.initResolution: fitMethod must be 'aspect', 'pixel', 'stretch', or 'none'", 2)
+      end
+
+      -- Validate renderMode
+      if settingsTable.renderMode ~= nil and
+         settingsTable.renderMode ~= "direct" and
+         settingsTable.renderMode ~= "layer" then
+        error("shove.initResolution: renderMode must be 'direct' or 'layer'", 2)
+      end
+
+      -- Validate scalingFilter
+      if settingsTable.scalingFilter ~= nil and
+         settingsTable.scalingFilter ~= "nearest" and
+         settingsTable.scalingFilter ~= "linear" and
+         settingsTable.scalingFilter ~= "none" then
+        error("shove.initResolution: scalingFilter must be 'nearest', 'linear', or 'none'", 2)
+      end
+    end
+
     -- Clear previous state
     state.layers.byName = {}
     state.layers.ordered = {}
@@ -468,6 +516,18 @@ local shove = {
 ---@return boolean success Whether the mode was set successfully
 ---@return string|nil error Error message if unsuccessful
   setMode = function(width, height, flags)
+    if type(width) ~= "number" or width <= 0 then
+      error("shove.setMode: width must be a positive number", 2)
+    end
+
+    if type(height) ~= "number" or height <= 0 then
+      error("shove.setMode: height must be a positive number", 2)
+    end
+
+    if flags ~= nil and type(flags) ~= "table" then
+      error("shove.setMode: flags must be a table or nil", 2)
+    end
+
     local success, message = love.window.setMode(width, height, flags)
 
     if success then
@@ -488,6 +548,18 @@ local shove = {
 ---@return boolean success Whether the mode was updated successfully
 ---@return string|nil error Error message if unsuccessful
   updateMode = function(width, height, flags)
+    if type(width) ~= "number" or width <= 0 then
+      error("shove.updateMode: width must be a positive number", 2)
+    end
+
+    if type(height) ~= "number" or height <= 0 then
+      error("shove.updateMode: height must be a positive number", 2)
+    end
+
+    if flags ~= nil and type(flags) ~= "table" then
+      error("shove.updateMode: flags must be a table or nil", 2)
+    end
+
     local success, message = love.window.updateMode(width, height, flags)
 
     if success then
@@ -501,6 +573,12 @@ local shove = {
 
   --- Begin drawing operations
   beginDraw = function()
+    -- Check if we're already in drawing mode
+    if state.inDrawMode then
+      error("shove.beginDraw: Already in drawing mode. Call endDraw() before calling beginDraw() again.", 2)
+      return false
+    end
+
     -- Set flag to indicate we're in drawing mode
     state.inDrawMode = true
 
@@ -526,11 +604,26 @@ local shove = {
       love.graphics.push()
       love.graphics.scale(state.scale_x, state.scale_y)
     end
+
+    return true
   end,
 
   --- End drawing operations and display result
   ---@param globalEffects love.Shader[]|nil Optional effects to apply globally
+  ---@return boolean success Whether drawing was ended successfully
   endDraw = function(globalEffects)
+    -- Check if we're in drawing mode
+    if not state.inDrawMode then
+      error("shove.endDraw: Not in drawing mode. Call beginDraw() before calling endDraw().", 2)
+      return false
+    end
+
+    -- Validate globalEffects parameter if provided
+    if globalEffects ~= nil and type(globalEffects) ~= "table" then
+      error("shove.endDraw: globalEffects must be a table of shaders or nil", 2)
+      return false
+    end
+
     if state.renderMode == "layer" then
       -- Ensure active layer is finished
       if state.layers.active then
@@ -561,6 +654,8 @@ local shove = {
 
     -- Reset drawing mode flag
     state.inDrawMode = false
+
+    return true
   end,
 
   -- Layer management API
@@ -570,6 +665,59 @@ local shove = {
   ---@param options? ShoveLayerOptions Layer configuration options
   ---@return ShoveLayer layer The created layer
   createLayer = function(name, options)
+    if type(name) ~= "string" then
+      error("shove.createLayer: name must be a string", 2)
+    end
+
+    if name == "" then
+      error("shove.createLayer: name cannot be empty", 2)
+    end
+
+    -- Check for reserved names
+    if name == "_composite" or name == "_tmp" then
+      error("shove.createLayer: '"..name.."' is a reserved layer name", 2)
+    end
+
+    -- Validate options if provided
+    if options ~= nil then
+      if type(options) ~= "table" then
+        error("shove.createLayer: options must be a table", 2)
+      end
+
+      -- Validate specific options if they exist
+      if options.zIndex ~= nil and type(options.zIndex) ~= "number" then
+        error("shove.createLayer: zIndex must be a number", 2)
+      end
+
+      if options.visible ~= nil and type(options.visible) ~= "boolean" then
+        error("shove.createLayer: visible must be a boolean", 2)
+      end
+
+      if options.stencil ~= nil and type(options.stencil) ~= "boolean" then
+        error("shove.createLayer: stencil must be a boolean", 2)
+      end
+
+      if options.effects ~= nil and type(options.effects) ~= "table" then
+        error("shove.createLayer: effects must be a table of shaders", 2)
+      end
+
+      if options.blendMode ~= nil then
+        if type(options.blendMode) ~= "string" then
+          error("shove.createLayer: blendMode must be a string", 2)
+        end
+
+        -- Optional: validate blend mode is one of LÖVE's supported values
+        local validBlendModes = {
+          alpha = true, replace = true, screen = true, add = true,
+          subtract = true, multiply = true, lighten = true, darken = true
+        }
+
+        if not validBlendModes[options.blendMode] then
+          error("shove.createLayer: '"..options.blendMode.."' is not a valid blend mode", 2)
+        end
+      end
+    end
+
     return createLayer(name, options)
   end,
 
@@ -577,6 +725,14 @@ local shove = {
   ---@param name string Layer name
   ---@return boolean success Whether layer was removed
   removeLayer = function(name)
+    if type(name) ~= "string" then
+      error("shove.removeLayer: name must be a string", 2)
+    end
+
+    if name == "" then
+      error("shove.removeLayer: name cannot be empty", 2)
+    end
+
     if name == "_composite" or not state.layers.byName[name] then
       return false
     end
@@ -602,6 +758,14 @@ local shove = {
   ---@param name string Layer name
   ---@return boolean exists Whether the layer exists
   layerExists = function(name)
+    if type(name) ~= "string" then
+      error("shove.layerExists: name must be a string", 2)
+    end
+
+    if name == "" then
+      error("shove.layerExists: name cannot be empty", 2)
+    end
+
     return state.layers.byName[name] ~= nil
   end,
 
@@ -610,6 +774,18 @@ local shove = {
   ---@param zIndex number Z-order position
   ---@return boolean success Whether the layer order was changed
   setLayerOrder = function(name, zIndex)
+    if type(name) ~= "string" then
+      error("shove.setLayerOrder: name must be a string", 2)
+    end
+
+    if name == "" then
+      error("shove.setLayerOrder: name cannot be empty", 2)
+    end
+
+    if type(zIndex) ~= "number" then
+      error("shove.setLayerOrder: zIndex must be a number", 2)
+    end
+
     local layer = getLayer(name)
     if not layer or name == "_composite" then
       return false
@@ -629,6 +805,14 @@ local shove = {
   ---@param name string Layer name
   ---@return number|nil zIndex Z-order position, or nil if layer doesn't exist
   getLayerOrder = function(name)
+    if type(name) ~= "string" then
+      error("shove.getLayerOrder: name must be a string", 2)
+    end
+
+    if name == "" then
+      error("shove.getLayerOrder: name cannot be empty", 2)
+    end
+
     local layer = getLayer(name)
     if not layer then return nil end
     return layer.zIndex
@@ -639,6 +823,18 @@ local shove = {
   ---@param isVisible boolean Whether the layer should be visible
   ---@return boolean success Whether the layer visibility was changed
   setLayerVisible = function(name, isVisible)
+    if type(name) ~= "string" then
+      error("shove.setLayerVisible: name must be a string", 2)
+    end
+
+    if name == "" then
+      error("shove.setLayerVisible: name cannot be empty", 2)
+    end
+
+    if type(isVisible) ~= "boolean" then
+      error("shove.setLayerVisible: isVisible must be a boolean", 2)
+    end
+
     local layer = getLayer(name)
     if not layer then
       return false
@@ -652,6 +848,14 @@ local shove = {
   ---@param name string Layer name
   ---@return boolean|nil isVisible Whether the layer is visible, or nil if layer doesn't exist
   isLayerVisible = function(name)
+    if type(name) ~= "string" then
+      error("shove.isLayerVisible: name must be a string", 2)
+    end
+
+    if name == "" then
+      error("shove.isLayerVisible: name cannot be empty", 2)
+    end
+
     local layer = getLayer(name)
     if not layer then return nil end
     return layer.visible
@@ -662,6 +866,22 @@ local shove = {
   ---@param maskName string|nil Name of layer to use as mask, or nil to clear mask
   ---@return boolean success Whether the mask was set
   setLayerMask = function(name, maskName)
+    if type(name) ~= "string" then
+      error("shove.setLayerMask: name must be a string", 2)
+    end
+
+    if name == "" then
+      error("shove.setLayerMask: name cannot be empty", 2)
+    end
+
+    if maskName ~= nil and type(maskName) ~= "string" then
+      error("shove.setLayerMask: maskName must be a string or nil", 2)
+    end
+
+    if maskName == "" then
+      error("shove.setLayerMask: maskName cannot be empty", 2)
+    end
+
     local layer = getLayer(name)
     if not layer then
       return false
@@ -685,6 +905,14 @@ local shove = {
   ---@param name string Layer name
   ---@return boolean success Whether the layer was activated
   beginLayer = function(name)
+    if type(name) ~= "string" then
+      error("shove.beginLayer: name must be a string", 2)
+    end
+
+    if name == "" then
+      error("shove.beginLayer: name cannot be empty", 2)
+    end
+
     return beginLayerDraw(name)
   end,
 
@@ -699,6 +927,14 @@ local shove = {
   ---@param applyPersistentEffects boolean|nil Whether to apply persistent global effects (default: false)
   ---@return boolean success Whether compositing was performed
   compositeAndDraw = function(globalEffects, applyPersistentEffects)
+    if globalEffects ~= nil and type(globalEffects) ~= "table" then
+      error("shove.compositeAndDraw: globalEffects must be a table of shaders or nil", 2)
+    end
+
+    if applyPersistentEffects ~= nil and type(applyPersistentEffects) ~= "boolean" then
+      error("shove.compositeAndDraw: applyPersistentEffects must be a boolean or nil", 2)
+    end
+
     -- This allows manually compositing layers at any point with optional effect control
     return compositeLayersToScreen(globalEffects, applyPersistentEffects or false)
   end,
@@ -708,6 +944,18 @@ local shove = {
   ---@param drawFunc function Callback function to execute for drawing
   ---@return boolean success Whether drawing was performed
   drawToLayer = function(name, drawFunc)
+    if type(name) ~= "string" then
+      error("shove.drawToLayer: name must be a string", 2)
+    end
+
+    if name == "" then
+      error("shove.drawToLayer: name cannot be empty", 2)
+    end
+
+    if type(drawFunc) ~= "function" then
+      error("shove.drawToLayer: drawFunc must be a function", 2)
+    end
+
     if state.renderMode ~= "layer" or not state.inDrawMode then
       return false
     end
@@ -736,6 +984,18 @@ local shove = {
   ---@param effect love.Shader Shader effect to add
   ---@return boolean success Whether the effect was added
   addEffect = function(layerName, effect)
+    if type(layerName) ~= "string" then
+      error("shove.addEffect: layerName must be a string", 2)
+    end
+
+    if layerName == "" then
+      error("shove.addEffect: layerName cannot be empty", 2)
+    end
+
+    if type(effect) ~= "userdata" then
+      error("shove.addEffect: effect must be a shader object", 2)
+    end
+
     local layer = getLayer(layerName)
     if not layer then return false end
     return addEffect(layer, effect)
@@ -746,6 +1006,18 @@ local shove = {
   ---@param effect love.Shader Shader effect to remove
   ---@return boolean success Whether the effect was removed
   removeEffect = function(layerName, effect)
+    if type(layerName) ~= "string" then
+      error("shove.removeEffect: layerName must be a string", 2)
+    end
+
+    if layerName == "" then
+      error("shove.removeEffect: layerName cannot be empty", 2)
+    end
+
+    if type(effect) ~= "userdata" then
+      error("shove.removeEffect: effect must be a shader object", 2)
+    end
+
     local layer = getLayer(layerName)
     if not layer then return false end
     return removeEffect(layer, effect)
@@ -755,6 +1027,14 @@ local shove = {
   ---@param layerName string Layer name
   ---@return boolean success Whether effects were cleared
   clearEffects = function(layerName)
+    if type(layerName) ~= "string" then
+      error("shove.clearEffects: layerName must be a string", 2)
+    end
+
+    if layerName == "" then
+      error("shove.clearEffects: layerName cannot be empty", 2)
+    end
+
     local layer = getLayer(layerName)
     if not layer then return false end
     return clearEffects(layer)
@@ -764,6 +1044,10 @@ local shove = {
   ---@param effect love.Shader Shader effect to add globally
   ---@return boolean success Whether the effect was added
   addGlobalEffect = function(effect)
+    if type(effect) ~= "userdata" then
+      error("shove.addGlobalEffect: effect must be a shader object", 2)
+    end
+
     if not state.layers.composite then
       createCompositeLayer()
     end
@@ -774,6 +1058,10 @@ local shove = {
   ---@param effect love.Shader Shader effect to remove
   ---@return boolean success Whether the effect was removed
   removeGlobalEffect = function(effect)
+    if type(effect) ~= "userdata" then
+      error("shove.removeGlobalEffect: effect must be a shader object", 2)
+    end
+
     if not state.layers.composite then return false end
     return removeEffect(state.layers.composite, effect)
   end,
@@ -792,6 +1080,13 @@ local shove = {
   ---@return number viewX Viewport X coordinate
   ---@return number viewY Viewport Y coordinate
   toViewport = function(x, y)
+    if type(x) ~= "number" then
+      error("shove.toViewport: x must be a number", 2)
+    end
+    if type(y) ~= "number" then
+      error("shove.toViewport: y must be a number", 2)
+    end
+
     x, y = x - state.offset_x, y - state.offset_y
     local normalX, normalY = x / state.rendered_width, y / state.rendered_height
     -- Calculate viewport positions even if outside viewport
@@ -809,6 +1104,13 @@ local shove = {
   ---@return number screenX Screen X coordinate
   ---@return number screenY Screen Y coordinate
   toScreen = function(x, y)
+    if type(x) ~= "number" then
+      error("shove.toScreen: x must be a number", 2)
+    end
+    if type(y) ~= "number" then
+      error("shove.toScreen: y must be a number", 2)
+    end
+
     local screenX = state.offset_x + (state.rendered_width * x) / state.viewport_width
     local screenY = state.offset_y + (state.rendered_height * y) / state.viewport_height
     return screenX, screenY
@@ -827,6 +1129,14 @@ local shove = {
   ---@param width number New window width
   ---@param height number New window height
   resize = function(width, height)
+    if type(width) ~= "number" or width <= 0 then
+      error("shove.resize: width must be a positive number", 2)
+    end
+
+    if type(height) ~= "number" or height <= 0 then
+      error("shove.resize: height must be a positive number", 2)
+    end
+
     state.screen_width = width
     state.screen_height = height
     calculateTransforms()
@@ -873,6 +1183,13 @@ local shove = {
   ---@param y number Screen Y coordinate
   ---@return boolean inside Whether coordinates are inside viewport
   inViewport = function(x, y)
+    if type(x) ~= "number" then
+      error("shove.inViewport: x must be a number", 2)
+    end
+    if type(y) ~= "number" then
+      error("shove.inViewport: y must be a number", 2)
+    end
+
     -- If stretch scaling is in use, coords are always in the viewport
     if state.fitMethod == "stretch" then
       return true
@@ -896,9 +1213,13 @@ local shove = {
   ---@param method "aspect"|"pixel"|"stretch"|"none" New fit method
   ---@return boolean success Whether the method was set
   setFitMethod = function(method)
+    if type(method) ~= "string" then
+      error("shove.setFitMethod: method must be a string", 2)
+    end
+
     local validMethods = {aspect = true, pixel = true, stretch = true, none = true}
     if not validMethods[method] then
-      return false
+      error("shove.setFitMethod: method must be 'aspect', 'pixel', 'stretch', or 'none'", 2)
     end
 
     state.fitMethod = method
@@ -917,9 +1238,13 @@ local shove = {
   ---@param mode "direct"|"layer" New render mode
   ---@return boolean success Whether the mode was set
   setRenderMode = function(mode)
+    if type(mode) ~= "string" then
+      error("shove.setRenderMode: mode must be a string", 2)
+    end
+
     local validModes = {direct = true, layer = true}
     if not validModes[mode] then
-      return false
+      error("shove.setRenderMode: mode must be 'direct' or 'layer'", 2)
     end
 
     state.renderMode = mode
@@ -929,18 +1254,22 @@ local shove = {
   end,
 
   --- Get current scaling filter
-  ---@return "nearest"|"linear"|"none" scalingFilter Current scaling filter
+  ---@return "nearest"|"linear" scalingFilter Current scaling filter
   getScalingFilter = function()
     return state.scalingFilter
   end,
 
   --- Set scaling filter
-  ---@param filter "nearest"|"linear"|"none" New scaling filter
+  ---@param filter "nearest"|"linear" New scaling filter
   ---@return boolean success Whether the filter was set
   setScalingFilter = function(filter)
+    if type(filter) ~= "string" then
+      error("shove.setScalingFilter: filter must be a string", 2)
+    end
+
     local validFilters = {nearest = true, linear = true, none = true}
     if not validFilters[filter] then
-      return false
+      error("shove.setScalingFilter: filter must be 'nearest', 'linear', or 'none'", 2)
     end
 
     state.scalingFilter = filter
@@ -954,6 +1283,18 @@ local shove = {
 ---@param options table|nil Options for display {showLayers = false, showPerformance = false}
 ---@return nil
   debugInfo = function(x, y, options)
+    if x ~= nil and type(x) ~= "number" then
+      error("shove.debugInfo: x must be a number or nil", 2)
+    end
+
+    if y ~= nil and type(y) ~= "number" then
+      error("shove.debugInfo: y must be a number or nil", 2)
+    end
+
+    if options ~= nil and type(options) ~= "table" and type(options) ~= "boolean" then
+      error("shove.debugInfo: options must be a table, boolean, or nil", 2)
+    end
+
     -- Default position in top-left corner with small margin
     x = x or 10
     y = y or 10
@@ -1149,13 +1490,12 @@ local shove = {
 ---@param callback function|nil Function to call after each resize, or nil to clear
 ---@return boolean success Whether the callback was set successfully
   setResizeCallback = function(callback)
-    if type(callback) == "function" or callback == nil then
-      state.resizeCallback = callback
-      return true
-    else
-      error("setResizeCallback: Expected function or nil, got " .. type(callback))
-      return false
+    if callback ~= nil and type(callback) ~= "function" then
+      error("shove.setResizeCallback: callback must be a function or nil", 2)
     end
+
+    state.resizeCallback = callback
+    return true
   end,
 
 --- Get the current resize callback function
