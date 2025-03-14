@@ -435,6 +435,84 @@ end
 
 With this approach, your rendering architecture is clearly defined, properly configured, and ready to use before your first frame is drawn.
 
+# Blend Mode Documentation for README.md
+
+I'll create documentation for the new blend mode capabilities in Shove. Here's content to add to your README.md:
+
+```markdown
+## Blend Modes
+
+Shove provides full support for LÖVE's blend modes at the layer level. This gives you precise control over how layers blend with each other when composited.
+
+### Blend Mode Constants
+
+For convenience and better code readability, Shove provides constants for all available blend modes:
+
+```lua
+-- Use constants instead of string literals
+shove.setLayerBlendMode("particles", shove.BLEND.ADD)
+
+-- Available blend mode constants
+shove.BLEND.ALPHA    -- Normal alpha blending (default)
+shove.BLEND.REPLACE  -- Replace pixels without blending
+shove.BLEND.SCREEN   -- Screen blending (lightens)
+shove.BLEND.ADD      -- Additive blending (glow effects)
+shove.BLEND.SUBTRACT -- Subtractive blending
+shove.BLEND.MULTIPLY -- Multiply colors (darkening)
+shove.BLEND.LIGHTEN  -- Keep lighter colors
+shove.BLEND.DARKEN   -- Keep darker colors
+
+-- Alpha mode constants
+shove.ALPHA.MULTIPLY     -- Standard alpha multiplication (default)
+shove.ALPHA.PREMULTIPLIED -- For pre-multiplied alpha content
+```
+
+## Blend Modes
+
+You can set blend modes either during layer creation or at any time afterward:
+
+```lua
+-- Set blend mode during layer creation
+shove.createLayer("glow", {
+  zIndex = 50,
+  blendMode = shove.BLEND.ADD,      -- Additive blending
+  blendAlphaMode = shove.ALPHA.MULTIPLY -- Default alpha mode
+})
+
+-- Set blend mode for an existing layer
+shove.setLayerBlendMode("particles", shove.BLEND.ADD)
+shove.setLayerBlendMode("ui", shove.BLEND.ALPHA, shove.ALPHA.PREMULTIPLIED)
+
+-- Get current blend modes
+local blendMode, alphaMode = shove.getLayerBlendMode("particles")
+```
+
+### Common Blend Mode Use Cases
+
+Different blend modes enable various visual effects:
+
+- **ADD**: Perfect for glowing effects, particle systems, light sources
+  ```lua
+  shove.setLayerBlendMode("fire", shove.BLEND.ADD)
+  ```
+
+- **MULTIPLY**: Great for shadows and darkening effects
+  ```lua
+  shove.setLayerBlendMode("shadow", shove.BLEND.MULTIPLY)
+  ```
+
+- **SCREEN**: Useful for lightning, lasers, and brightening effects
+  ```lua
+  shove.setLayerBlendMode("lightning", shove.BLEND.SCREEN)
+  ```
+
+- **ALPHA**: Standard transparency blending (default)
+  ```lua
+  shove.setLayerBlendMode("ui", shove.BLEND.ALPHA)
+  ```
+
+For proper rendering of content drawn to canvases, Shöve automatically uses premultiplied alpha when compositing layers, while respecting each layer's blend mode setting.
+
 ## Layer Masking
 
 Layer masking in Shöve provides a straightforward way to control visibility between layers.
@@ -914,6 +992,8 @@ end
 - `shove.hasLayer(name)` - Check if a layer exists
 - `shove.getLayerOrder(name)` - Get layer drawing order
 - `shove.setLayerOrder(name, zIndex)` - Set layer drawing order
+- `shove.getLayerBlendMode(name)` - Get the blend mode and alpha mode of a layer
+- `shove.setLayerBlendMode(name, blendMode, alphaMode)` - Set blend mode and optional alpha mode
 - `shove.isLayerVisible(name)` - Check if a layer is visible
 - `shove.hideLayer(name)` - Hide a layer
 - `shove.showLayer(name)` - Show a layer

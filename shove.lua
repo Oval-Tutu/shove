@@ -128,6 +128,7 @@ end
 ---@field stencil? boolean Whether layer supports stencil operations (default: false)
 ---@field effects? love.Shader[] Effects to apply to the layer (optional)
 ---@field blendMode? love.BlendMode Blend mode for the layer (default: "alpha")
+---@field blendAlphaMode? love.BlendAlphaMode Alpha blend mode (default: "alphamultiply")
 
 --- Create a new layer or return existing one
 ---@param name string Layer name
@@ -149,6 +150,7 @@ local function createLayer(name, options)
     stencil = options.stencil or false,
     effects = options.effects or {},
     blendMode = options.blendMode or "alpha",
+    blendAlphaMode = options.blendAlphaMode or "alphamultiply",
     maskLayer = nil
   }
 
@@ -339,7 +341,8 @@ local function compositeLayersToScreen(globalEffects, applyPersistentEffects)
       end
 
       -- Use premultiplied alpha when drawing canvases
-      love.graphics.setBlendMode("alpha", "premultiplied")
+      -- But respect the layer's blend mode
+      love.graphics.setBlendMode(layer.blendMode, "premultiplied")
 
       -- Apply layer effects or draw directly
       if #layer.effects > 0 then
@@ -438,6 +441,22 @@ end
 
 ---@class Shove
 local shove = {
+  --- Blend mode constants
+  BLEND = {
+    ALPHA = "alpha",
+    REPLACE = "replace",
+    SCREEN = "screen",
+    ADD = "add",
+    SUBTRACT = "subtract",
+    MULTIPLY = "multiply",
+    LIGHTEN = "lighten",
+    DARKEN = "darken"
+  },
+  --- Alpha blend mode constants
+  ALPHA = {
+    MULTIPLY = "alphamultiply",
+    PREMULTIPLIED = "premultiplied"
+  },
   ---@class ShoveInitOptions
   ---@field fitMethod? "aspect"|"pixel"|"stretch"|"none" Scaling method
   ---@field renderMode? "direct"|"layer" Rendering approach
@@ -785,6 +804,64 @@ local shove = {
     end
 
     return state.layers.byName[name] ~= nil
+  end,
+
+--- Set the blend mode for a layer
+---@param layerName string Layer name
+---@param blendMode love.BlendMode Blend mode to use
+---@param blendAlphaMode? love.BlendAlphaMode Blend alpha mode (default: "alphamultiply")
+---@return boolean success Whether the blend mode was set
+  setLayerBlendMode = function(layerName, blendMode, blendAlphaMode)
+    if type(layerName) ~= "string" then
+      error("shove.setLayerBlendMode: layerName must be a string", 2)
+    end
+
+    if layerName == "" then
+      error("shove.setLayerBlendMode: layerName cannot be empty", 2)
+    end
+
+    if type(blendMode) ~= "string" then
+      error("shove.setLayerBlendMode: blendMode must be a string", 2)
+    end
+
+    local validBlendModes = {
+      alpha = true, replace = true, screen = true, add = true,
+      subtract = true, multiply = true, lighten = true, darken = true
+    }
+
+    if not validBlendModes[blendMode] then
+      error("shove.setLayerBlendMode: Invalid blend mode", 2)
+    end
+
+    if blendAlphaMode ~= nil and blendAlphaMode ~= "alphamultiply" and blendAlphaMode ~= "premultiplied" then
+      error("shove.setLayerBlendMode: blendAlphaMode must be 'alphamultiply' or 'premultiplied'", 2)
+    end
+
+    local layer = getLayer(layerName)
+    if not layer then return false end
+
+    layer.blendMode = blendMode
+    layer.blendAlphaMode = blendAlphaMode or "alphamultiply"
+    return true
+  end,
+
+--- Get the blend mode of a layer
+---@param layerName string Layer name
+---@return love.BlendMode|nil blendMode Current blend mode
+---@return love.BlendAlphaMode|nil blendAlphaMode Current blend alpha mode
+  getLayerBlendMode = function(layerName)
+    if type(layerName) ~= "string" then
+      error("shove.getLayerBlendMode: layerName must be a string", 2)
+    end
+
+    if layerName == "" then
+      error("shove.getLayerBlendMode: layerName cannot be empty", 2)
+    end
+
+    local layer = getLayer(layerName)
+    if not layer then return nil, nil end
+
+    return layer.blendMode, layer.blendAlphaMode
   end,
 
   --- Set the z-index order of a layer
@@ -1474,7 +1551,14 @@ local shove = {
       for i, layer in ipairs(state.layers.ordered) do
         if layer.name ~= "_composite" and layer.name ~= "_tmp" then
           local visibility = layer.visible and "y" or "n"
-          local layerInfo = string.format("%d: %s [%s]", layer.zIndex, layer.name, visibility)
+          local layerInfo = string.format(
+            "%d: %s [%s] %s/%s",
+            layer.zIndex,
+            layer.name,
+            visibility,
+            layer.blendMode,
+            layer.blendAlphaMode:sub(1,4) -- Shortened for display
+          )
 
           -- Highlight active layer
           if state.layers.active and layer.name == state.layers.active.name then
