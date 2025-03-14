@@ -1,7 +1,7 @@
 return function()
   function love.load()
     local windowWidth, windowHeight = love.window.getDesktopDimensions()
-    shove.initResolution(64, 64, { fitMethod = "pixel", renderMode = "layer" })
+    shove.setResolution(64, 64, { fitMethod = "pixel", renderMode = "layer" })
     shove.setMode(windowWidth * 0.5, windowHeight * 0.5, { fullscreen = false, resizable = true })
     love.mouse.setVisible(false)
     love.graphics.setNewFont(16)

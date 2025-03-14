@@ -429,17 +429,17 @@ local shove = {
   ---@param width number Viewport width
   ---@param height number Viewport height
   ---@param settingsTable? ShoveInitOptions Configuration options
-  initResolution = function(width, height, settingsTable)
+  setResolution = function(width, height, settingsTable)
     if type(width) ~= "number" or width <= 0 then
-      error("shove.initResolution: width must be a positive number", 2)
+      error("shove.setResolution: width must be a positive number", 2)
     end
 
     if type(height) ~= "number" or height <= 0 then
-      error("shove.initResolution: height must be a positive number", 2)
+      error("shove.setResolution: height must be a positive number", 2)
     end
 
     if settingsTable ~= nil and type(settingsTable) ~= "table" then
-      error("shove.initResolution: settingsTable must be a table or nil", 2)
+      error("shove.setResolution: settingsTable must be a table or nil", 2)
     end
 
     -- Validate settings if provided
@@ -450,14 +450,14 @@ local shove = {
          settingsTable.fitMethod ~= "pixel" and
          settingsTable.fitMethod ~= "stretch" and
          settingsTable.fitMethod ~= "none" then
-        error("shove.initResolution: fitMethod must be 'aspect', 'pixel', 'stretch', or 'none'", 2)
+        error("shove.setResolution: fitMethod must be 'aspect', 'pixel', 'stretch', or 'none'", 2)
       end
 
       -- Validate renderMode
       if settingsTable.renderMode ~= nil and
          settingsTable.renderMode ~= "direct" and
          settingsTable.renderMode ~= "layer" then
-        error("shove.initResolution: renderMode must be 'direct' or 'layer'", 2)
+        error("shove.setResolution: renderMode must be 'direct' or 'layer'", 2)
       end
 
       -- Validate scalingFilter
@@ -465,7 +465,7 @@ local shove = {
          settingsTable.scalingFilter ~= "nearest" and
          settingsTable.scalingFilter ~= "linear" and
          settingsTable.scalingFilter ~= "none" then
-        error("shove.initResolution: scalingFilter must be 'nearest', 'linear', or 'none'", 2)
+        error("shove.setResolution: scalingFilter must be 'nearest', 'linear', or 'none'", 2)
       end
     end
 

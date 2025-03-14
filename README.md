@@ -26,7 +26,7 @@ shove = require("shove")
 
 function love.load()
   -- Initialize Shöve with fixed game resolution and options
-  shove.initResolution(800, 600, {
+  shove.setResolution(800, 600, {
     fitMethod = "pixel", -- "pixel", "aspect", "stretch", or "none"
     renderMode = "direct" -- "direct" or "layer"
   })
@@ -142,7 +142,7 @@ Shöve offers several methods to fit your game to different screen sizes:
 
 ```lua
 -- Use pixel-perfect scaling
-shove.initResolution(320, 240, {fitMethod = "pixel"})
+shove.setResolution(320, 240, {fitMethod = "pixel"})
 ```
 
 ### Scaling Filters
@@ -153,7 +153,7 @@ You can set `scalingFilter` in two ways:
 
 1. **At initialization:**
    ```lua
-   shove.initResolution(800, 600, {
+   shove.setResolution(800, 600, {
      fitMethod = "aspect",
      scalingFilter = "nearest" -- Set filtering explicitly
    })
@@ -184,7 +184,7 @@ You can check the current setting at any time with `shove.getScalingFilter()`.
 Shöve provides wrapper functions for LÖVE's window management.
 Set the window dimensions and properties with automatic resize handling using `shove.setMode(width, height, flags)`.
 
-**💡 NOTE:** For best results, call `shove.initResolution()` before using these window management functions to ensure proper viewport initialization.
+**💡 NOTE:** For best results, call `shove.setResolution()` before using these window management functions to ensure proper viewport initialization.
 
 
 ```lua
@@ -211,7 +211,7 @@ It's suitable for games that don't need advanced rendering features.
 
 ```lua
 -- Initialize with direct rendering mode
-shove.initResolution(800, 600, {renderMode = "direct"})
+shove.setResolution(800, 600, {renderMode = "direct"})
 
 function love.draw()
   shove.beginDraw()
@@ -292,7 +292,7 @@ Under the hood, Shöve uses [LÖVE's Canvas system](https://love2d.org/wiki/Canv
 ```lua
 shove = require("shove")
 -- Initialize with layer rendering mode
-shove.initResolution(800, 600, {renderMode = "layer"})
+shove.setResolution(800, 600, {renderMode = "layer"})
 
 function love.load()
   -- Create some layers (optional, they're created automatically when used)
@@ -867,7 +867,7 @@ end
 
 ### Initialization and Setup
 
-- `shove.initResolution(width, height, options)` - Initialize with game resolution
+- `shove.setResolution(width, height, options)` - Initialize with game resolution
 - `shove.setMode(width, height, options)` - Set window mode
 - `shove.updateMode(width, height, options)` - Update window mode
 - `shove.resize(width, height)` - Update when window size changes
