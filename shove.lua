@@ -1,6 +1,7 @@
 ---@class ShoveState
 ---@field fitMethod "aspect"|"pixel"|"stretch"|"none" Scaling method
 ---@field renderMode "direct"|"layer" Rendering approach
+---@field scalingFilter "nearest"|"linear" Scaling filter for textures
 ---@field screen_width number Window width
 ---@field screen_height number Window height
 ---@field viewport_width number Internal game width
@@ -19,6 +20,7 @@ local state = {
   -- Settings
   fitMethod = "aspect",
   renderMode = "direct",
+  scalingFilter = "linear",
   -- Dimensions
   screen_width = 0,
   screen_height = 0,
@@ -103,8 +105,8 @@ local function calculateTransforms()
   -- Calculate final draw dimensions
   state.rendered_width = state.screen_width - state.offset_x * 2
   state.rendered_height = state.screen_height - state.offset_y * 2
-  -- Set appropriate filter based on scaling mode
-  love.graphics.setDefaultFilter(state.fitMethod == "pixel" and "nearest" or "linear")
+  -- Set appropriate filter based on scaling configuration
+  love.graphics.setDefaultFilter(state.scalingFilter)
 
   -- Recreate canvases for all layers when dimensions change
   if state.renderMode == "layer" then
@@ -411,6 +413,7 @@ local shove = {
   ---@class ShoveInitOptions
   ---@field fitMethod? "aspect"|"pixel"|"stretch"|"none" Scaling method
   ---@field renderMode? "direct"|"layer" Rendering approach
+  ---@field scalingFilter? "nearest"|"linear" Scaling filter for textures
 
   --- Initialize the resolution system
   ---@param width number Viewport width
@@ -431,9 +434,15 @@ local shove = {
     if settingsTable then
       state.fitMethod = settingsTable.fitMethod or "aspect"
       state.renderMode = settingsTable.renderMode or "direct"
+      if settingsTable.scalingFilter then
+        state.scalingFilter = settingsTable.scalingFilter
+      else
+        state.scalingFilter = state.fitMethod == "pixel" and "nearest" or "linear"
+      end
     else
       state.fitMethod = "aspect"
       state.renderMode = "direct"
+      state.scalingFilter = "linear"
     end
 
     calculateTransforms()
@@ -873,6 +882,26 @@ local shove = {
     state.renderMode = mode
     -- Recalculate transforms with current dimensions
     shove.resize(state.screen_width, state.screen_height)
+    return true
+  end,
+
+  --- Get current scaling filter
+  ---@return "nearest"|"linear"|"none" scalingFilter Current scaling filter
+  getScalingFilter = function()
+    return state.scalingFilter
+  end,
+
+  --- Set scaling filter
+  ---@param filter "nearest"|"linear"|"none" New scaling filter
+  ---@return boolean success Whether the filter was set
+  setScalingFilter = function(filter)
+    local validFilters = {nearest = true, linear = true, none = true}
+    if not validFilters[filter] then
+      return false
+    end
+
+    state.scalingFilter = filter
+    love.graphics.setDefaultFilter(filter)
     return true
   end,
 }
