@@ -290,13 +290,13 @@ end
 ---@param globalEffects love.Shader[]|nil Optional effects to apply globally
 ---@param applyPersistentEffects boolean Whether to apply persistent global effects
 ---@return boolean success Whether compositing was performed
-local function compositeLayersToScreen(globalEffects, applyPersistentEffects)
+local function compositeLayersOnScreen(globalEffects, applyPersistentEffects)
   if globalEffects ~= nil and type(globalEffects) ~= "table" then
-    error("compositeLayersToScreen: globalEffects must be a table of shaders or nil", 2)
+    error("compositeLayersOnScreen: globalEffects must be a table of shaders or nil", 2)
   end
 
   if type(applyPersistentEffects) ~= "boolean" then
-    error("compositeLayersToScreen: applyPersistentEffects must be a boolean", 2)
+    error("compositeLayersOnScreen: applyPersistentEffects must be a boolean", 2)
   end
 
   if state.renderMode ~= "layer" then
@@ -675,7 +675,7 @@ local shove = {
       end
 
       -- Composite and draw layers to screen (always apply global persistent effects in endDraw)
-      compositeLayersToScreen(globalEffects, true)
+      compositeLayersOnScreen(globalEffects, true)
       love.graphics.pop()
 
       -- Clear all layer canvases
@@ -1072,7 +1072,7 @@ local shove = {
     end
 
     -- This allows manually compositing layers at any point with optional effect control
-    return compositeLayersToScreen(globalEffects, applyPersistentEffects or false)
+    return compositeLayersOnScreen(globalEffects, applyPersistentEffects or false)
   end,
 
   --- Draw to a specific layer using a callback function
