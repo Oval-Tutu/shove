@@ -461,6 +461,44 @@ local shove = {
     end
   end,
 
+--- Set the window mode with automatic resize handling
+---@param width number Window width
+---@param height number Window height
+---@param flags table|nil Window flags (resizable, fullscreen, etc.)
+---@return boolean success Whether the mode was set successfully
+---@return string|nil error Error message if unsuccessful
+  setMode = function(width, height, flags)
+    local success, message = love.window.setMode(width, height, flags)
+
+    if success then
+      -- Only call resize if we're already initialized
+      if state.viewport_width > 0 and state.viewport_height > 0 then
+        local actualWidth, actualHeight = love.graphics.getDimensions()
+        shove.resize(actualWidth, actualHeight)
+      end
+    end
+
+    return success, message
+  end,
+
+--- Update the window mode with automatic resize handling
+---@param width number Window width
+---@param height number Window height
+---@param flags table|nil Window flags (resizable, fullscreen, etc.)
+---@return boolean success Whether the mode was updated successfully
+---@return string|nil error Error message if unsuccessful
+  updateMode = function(width, height, flags)
+    local success, message = love.window.updateMode(width, height, flags)
+
+    if success then
+      -- Get the actual dimensions (might differ from requested)
+      local actualWidth, actualHeight = love.graphics.getDimensions()
+      shove.resize(actualWidth, actualHeight)
+    end
+
+    return success, message
+  end,
+
   --- Begin drawing operations
   beginDraw = function()
     -- Set flag to indicate we're in drawing mode

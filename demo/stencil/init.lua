@@ -1,8 +1,8 @@
 return function()
   function love.load()
     local windowWidth, windowHeight = love.window.getDesktopDimensions()
-    love.window.setMode(windowWidth * 0.5, windowHeight * 0.5, { fullscreen = false, resizable = true })
     shove.initResolution(960, 540, { fitMethod = "aspect", renderMode = "layer" })
+    shove.setMode(windowWidth * 0.5, windowHeight * 0.5, { fullscreen = false, resizable = true })
     nogame = love.graphics.newImage("stencil/nogame.png")
 
     shove.createLayer("background", { zIndex = 10 })
