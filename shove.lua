@@ -833,6 +833,48 @@ local shove = {
     return x >= viewX and x < viewX + viewWidth and
            y >= viewY and y < viewY + viewHeight
   end,
+
+  --- Get current fit method
+  ---@return "aspect"|"pixel"|"stretch"|"none" fitMethod Current fit method
+  getFitMethod = function()
+    return state.fitMethod
+  end,
+
+  --- Set fit method
+  ---@param method "aspect"|"pixel"|"stretch"|"none" New fit method
+  ---@return boolean success Whether the method was set
+  setFitMethod = function(method)
+    local validMethods = {aspect = true, pixel = true, stretch = true, none = true}
+    if not validMethods[method] then
+      return false
+    end
+
+    state.fitMethod = method
+    -- Recalculate transforms with current dimensions
+    shove.resize(state.screen_width, state.screen_height)
+    return true
+  end,
+
+  --- Get current render mode
+  ---@return "direct"|"layer" renderMode Current render mode
+  getRenderMode = function()
+    return state.renderMode
+  end,
+
+  --- Set render mode
+  ---@param mode "direct"|"layer" New render mode
+  ---@return boolean success Whether the mode was set
+  setRenderMode = function(mode)
+    local validModes = {direct = true, layer = true}
+    if not validModes[mode] then
+      return false
+    end
+
+    state.renderMode = mode
+    -- Recalculate transforms with current dimensions
+    shove.resize(state.screen_width, state.screen_height)
+    return true
+  end,
 }
 
 return shove
