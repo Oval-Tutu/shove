@@ -90,20 +90,20 @@ The complete suite of demos can originally be found in push have been ported to 
 
 ## What is included in the demo?
 
-- **low-res:** Demonstrates pixel-perfect scaling with a tiny 64x64 resolution.
+- [**low-res**](https://github.com/Oval-Tutu/shove/blob/main/demo/low-res/init.lua): Demonstrates pixel-perfect scaling with a tiny 64x64 resolution.
   - Shows how to use layer-based rendering for a retro-style game with an animated text effect.
   - Also includes mouse coordinate conversion to display a custom cursor.
-- **single-shader:** Shows how to apply a shader to a specific layer.
+- [**single-shader**](https://github.com/Oval-Tutu/shove/blob/main/demo/single-shader/init.lua): Shows how to apply a shader to a specific layer.
   - Demonstrates creating a layer, adding an effect to it, and animating shader parameters over time for dynamic visual effects.
-- **multiple-shaders:** Illustrates how to chain multiple shaders together using global effects.
+- [**multiple-shaders**](https://github.com/Oval-Tutu/shove/blob/main/demo/multiple-shaders/init.lua): Illustrates how to chain multiple shaders together using global effects.
   - Shows how global effects are applied to the entire rendering output, creating complex visual transformations by combining shader effects.
-- **mouse-input:** Focuses on coordinate conversion between screen and viewport spaces.
+- [**mouse-input**](https://github.com/Oval-Tutu/shove/blob/main/demo/mouse-input/init.lua): Focuses on coordinate conversion between screen and viewport spaces.
   - Demonstrates how to check if the mouse is inside the viewport and convert coordinates appropriately, essential for handling input in games with scaled resolution.
-- **canvases-shaders**: Shows advanced layering with different effects applied to different layers.
+- [**canvases-shaders**](https://github.com/Oval-Tutu/shove/blob/main/demo/canvases-shaders/init.lua): Shows advanced layering with different effects applied to different layers.
   - Demonstrates using both layer-specific shaders and global shaders simultaneously, allowing for more complex visual compositions.
-- **stencil:** Illustrates how to use the stencil buffer with Shöve's layer system.
+- [**stencil**](https://github.com/Oval-Tutu/shove/blob/main/demo/stencil/init.lua): Illustrates how to use the stencil buffer with Shöve's layer system.
   - Shows how to create complex masking effects with stencil testing, allowing you to limit rendering to specific shapes or areas.
-- **mask:** Demonstrates Shöve's layer masking capabilities.
+- [**mask**](https://github.com/Oval-Tutu/shove/blob/main/demo/mask/init.lua): Demonstrates Shöve's layer masking capabilities.
   - Shows how to use one layer as a mask for another, allowing you to create dynamic visibility effects where one layer controls what's visible in another.
 
 # Shöve Guide 📚
@@ -435,11 +435,6 @@ end
 
 With this approach, your rendering architecture is clearly defined, properly configured, and ready to use before your first frame is drawn.
 
-# Blend Mode Documentation for README.md
-
-I'll create documentation for the new blend mode capabilities in Shove. Here's content to add to your README.md:
-
-```markdown
 ## Blend Modes
 
 Shove provides full support for LÖVE's blend modes at the layer level. This gives you precise control over how layers blend with each other when composited.
@@ -495,17 +490,14 @@ Different blend modes enable various visual effects:
   ```lua
   shove.setLayerBlendMode("fire", shove.BLEND.ADD)
   ```
-
 - **MULTIPLY**: Great for shadows and darkening effects
   ```lua
   shove.setLayerBlendMode("shadow", shove.BLEND.MULTIPLY)
   ```
-
 - **SCREEN**: Useful for lightning, lasers, and brightening effects
   ```lua
   shove.setLayerBlendMode("lightning", shove.BLEND.SCREEN)
   ```
-
 - **ALPHA**: Standard transparency blending (default)
   ```lua
   shove.setLayerBlendMode("ui", shove.BLEND.ALPHA)
