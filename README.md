@@ -997,6 +997,7 @@ end
 - `shove.isLayerVisible(name)` - Check if a layer is visible
 - `shove.hideLayer(name)` - Hide a layer
 - `shove.showLayer(name)` - Show a layer
+- `shove.getLayerMask(name)` - Get the mask of a layer
 - `shove.setLayerMask(name, maskName)` - Set a layer as a mask
 - `shove.drawToLayer(name, drawFunc)` - Draw to a layer with a callback
 - `shove.compositeAndDraw(globalEffects, applyPersistentEffects)` - Composite and draw the current state

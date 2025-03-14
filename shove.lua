@@ -972,6 +972,24 @@ local shove = {
     return layer.visible
   end,
 
+--- Get the mask layer used by a layer
+---@param name string Layer name
+---@return string|nil maskName Name of the mask layer, or nil if no mask or layer doesn't exist
+  getLayerMask = function(name)
+    if type(name) ~= "string" then
+      error("shove.getLayerMask: name must be a string", 2)
+    end
+
+    if name == "" then
+      error("shove.getLayerMask: name cannot be empty", 2)
+    end
+
+    local layer = getLayer(name)
+    if not layer then return nil end
+
+    return layer.maskLayer
+  end,
+
   --- Set a mask for a layer
   ---@param name string Layer name
   ---@param maskName string|nil Name of layer to use as mask, or nil to clear mask
