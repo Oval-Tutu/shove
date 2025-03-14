@@ -757,13 +757,13 @@ local shove = {
   --- Check if a layer exists
   ---@param name string Layer name
   ---@return boolean exists Whether the layer exists
-  layerExists = function(name)
+  hasLayer = function(name)
     if type(name) ~= "string" then
-      error("shove.layerExists: name must be a string", 2)
+      error("shove.hasLayer: name must be a string", 2)
     end
 
     if name == "" then
-      error("shove.layerExists: name cannot be empty", 2)
+      error("shove.hasLayer: name cannot be empty", 2)
     end
 
     return state.layers.byName[name] ~= nil
