@@ -1055,13 +1055,13 @@ local shove = {
   ---@param globalEffects love.Shader[]|nil Optional effects to apply globally for this draw
   ---@param applyPersistentEffects boolean|nil Whether to apply persistent global effects (default: false)
   ---@return boolean success Whether compositing was performed
-  compositeAndDraw = function(globalEffects, applyPersistentEffects)
+  drawComposite = function(globalEffects, applyPersistentEffects)
     if globalEffects ~= nil and type(globalEffects) ~= "table" then
-      error("shove.compositeAndDraw: globalEffects must be a table of shaders or nil", 2)
+      error("shove.drawComposite: globalEffects must be a table of shaders or nil", 2)
     end
 
     if applyPersistentEffects ~= nil and type(applyPersistentEffects) ~= "boolean" then
-      error("shove.compositeAndDraw: applyPersistentEffects must be a boolean or nil", 2)
+      error("shove.drawComposite: applyPersistentEffects must be a boolean or nil", 2)
     end
 
     -- This allows manually compositing layers at any point with optional effect control

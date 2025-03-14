@@ -754,7 +754,7 @@ Here are some good use cases for `drawToLayer()`:
 
 ### Manual Compositing
 
-The `compositeAndDraw()` function performs an intermediate composite and draw operation during an active drawing cycle.
+The `drawComposite()` function performs an intermediate composite and draw operation during an active drawing cycle.
 Specifically, it:
 
 1. Takes all layers that have been drawn so far in the current frame
@@ -766,18 +766,18 @@ Specifically, it:
 
 This differs from the typical `beginDraw()`/`endDraw()` cycle, where compositing and drawing only happen at the end when `endDraw()` is called.
 
-The `compositeAndDraw()` function provides a powerful tool for advanced rendering techniques.
+The `drawComposite()` function provides a powerful tool for advanced rendering techniques.
 It gives you finer control over the rendering pipeline by allowing intermediate compositing and drawing operations within a single frame.
 
-- `compositeAndDraw()` → Composite and draw the current state with no transient or persistent effects
-- `compositeAndDraw({anEffect}, false)` → Composite and draw the current state with a transient effect
-- `compositeAndDraw({anEffect, anotherEffect}, true)` → Composite and draw the current state with transient and persistent effects
-- `compositeAndDraw(nil, true)` → Composite and draw the current state with persistent effects
+- `drawComposite()` → Composite and draw the current state with no transient or persistent effects
+- `drawComposite({anEffect}, false)` → Composite and draw the current state with a transient effect
+- `drawComposite({anEffect, anotherEffect}, true)` → Composite and draw the current state with transient and persistent effects
+- `drawComposite(nil, true)` → Composite and draw the current state with persistent effects
 
 While most games won't need this level of control, it can be useful for complex visual effects, multi-stage rendering, debugging, or interactive applications that need to respond to partially-rendered content.
 You can manually trigger the compositing process before the end of drawing:
 
-### When to Use `compositeAndDraw()`
+### When to Use `drawComposite()`
 
 #### Multi-Pass Rendering
 
@@ -793,7 +793,7 @@ shove.beginDraw()
   shove.endLayer()
 
   -- Composite and draw what we have so far
-  shove.compositeAndDraw()
+  shove.drawComposite()
 
   -- Draw second pass with effects that need to see the first pass result
   shove.beginLayer("lighting")
@@ -813,7 +813,7 @@ shove.beginDraw()
   -- Draw base layers
 
   -- Show intermediate result for debugging
-  shove.compositeAndDraw()
+  shove.drawComposite()
 
   -- Debug visualization appears on top
   shove.beginLayer("debug")
@@ -832,7 +832,7 @@ shove.beginDraw()
   -- Draw background layers
 
   -- Draw to screen so we can capture player input on what's been drawn so far
-  shove.compositeAndDraw()
+  shove.drawComposite()
 
   -- Get player input based on what they see
   local selectedPosition = getPlayerSelection()
@@ -1000,7 +1000,7 @@ end
 - `shove.getLayerMask(name)` - Get the mask of a layer
 - `shove.setLayerMask(name, maskName)` - Set a layer as a mask
 - `shove.drawToLayer(name, drawFunc)` - Draw to a layer with a callback
-- `shove.compositeAndDraw(globalEffects, applyPersistentEffects)` - Composite and draw the current state
+- `shove.drawComposite(globalEffects, applyPersistentEffects)` - Composite and draw the current state
 
 ### Effect System
 
