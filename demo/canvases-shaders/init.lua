@@ -1,7 +1,7 @@
 return function()
   function love.load()
     local windowWidth, windowHeight = love.window.getDesktopDimensions()
-    shove.initResolution(960, 540, { renderMode = "layer" })
+    shove.setResolution(960, 540, { renderMode = "layer" })
     shove.setMode(windowWidth * 0.5, windowHeight * 0.5, { fullscreen = false, resizable = true })
     image1 = love.graphics.newImage("canvases-shaders/love1.png")
     image2 = love.graphics.newImage("canvases-shaders/love2.png")
