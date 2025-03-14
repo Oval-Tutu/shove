@@ -35,7 +35,7 @@ return function()
         love.graphics.draw(nogame, 0, 0)
       shove.endLayer()
 
-      local mouseInViewport, mouseX, mouseY = shove.getMouseInViewport()
+      local mouseInViewport, mouseX, mouseY = shove.mouseToViewport()
       -- If outside the viewport hide the cursor layer
       -- Invisible layers do not get rendered
       if mouseInViewport then

@@ -1249,7 +1249,7 @@ local shove = {
   ---@return boolean inside Whether mouse is inside viewport
   ---@return number mouseX Viewport X coordinate
   ---@return number mouseY Viewport Y coordinate
-  getMouseInViewport = function()
+  mouseToViewport = function()
     local mouseX, mouseY = love.mouse.getPosition()
     return shove.screenToViewport(mouseX, mouseY)
   end,
