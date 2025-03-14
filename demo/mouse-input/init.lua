@@ -22,6 +22,6 @@ return function()
       love.graphics.printf("mouse x: " .. (mouseInViewport and mouseX or "outside"), 25, 25, shoveWidth, "left")
       love.graphics.printf("mouse y: " .. (mouseInViewport and mouseY or "outside"), 25, 55, shoveWidth, "left")
     shove.endDraw()
-    shove.debugHandler()
+    shove.handleDebugKeys()
   end
 end

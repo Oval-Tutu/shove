@@ -1411,17 +1411,17 @@ local shove = {
 ---@param y number|nil Y position for debug display (default: 10)
 ---@param options table|nil Options for display {showLayers = false, showPerformance = false}
 ---@return nil
-  debugInfo = function(x, y, options)
+  showDebugInfo = function(x, y, options)
     if x ~= nil and type(x) ~= "number" then
-      error("shove.debugInfo: x must be a number or nil", 2)
+      error("shove.showDebugInfo: x must be a number or nil", 2)
     end
 
     if y ~= nil and type(y) ~= "number" then
-      error("shove.debugInfo: y must be a number or nil", 2)
+      error("shove.showDebugInfo: y must be a number or nil", 2)
     end
 
     if options ~= nil and type(options) ~= "table" and type(options) ~= "boolean" then
-      error("shove.debugInfo: options must be a table, boolean, or nil", 2)
+      error("shove.showDebugInfo: options must be a table, boolean, or nil", 2)
     end
 
     -- Default position in top-left corner with small margin
@@ -1603,22 +1603,22 @@ local shove = {
   --- F3: Basic info with layers
   --- F4: Basic info only
   ---@return nil
-  debugHandler = function()
+  handleDebugKeys = function()
     local debugX = love.graphics.getWidth() - 240
     local debugY = 10
 
     if love.keyboard.isDown("f1") then
       -- Show full debug info including layers and performance when F1 is pressed
-      shove.debugInfo(debugX, debugY, {showLayers = true, showPerformance = true})
+      shove.showDebugInfo(debugX, debugY, {showLayers = true, showPerformance = true})
     elseif love.keyboard.isDown("f2") then
       -- Show basic debug info + performance when F2 is pressed
-      shove.debugInfo(debugX, debugY, {showPerformance = true})
+      shove.showDebugInfo(debugX, debugY, {showPerformance = true})
     elseif love.keyboard.isDown("f3") then
       -- Show only layer info when F3 is pressed
-      shove.debugInfo(debugX, debugY, {showLayers = true})
+      shove.showDebugInfo(debugX, debugY, {showLayers = true})
     elseif love.keyboard.isDown("f4") then
       -- Show basic debug info when F4 is pressed
-      shove.debugInfo(debugX, debugY)
+      shove.showDebugInfo(debugX, debugY)
     end
   end,
 

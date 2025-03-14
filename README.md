@@ -903,7 +903,7 @@ This can help diagnose scaling issues and optimize your game.
 
 #### Integration
 
-To enable the debug visualization in your project, add a call to `shove.debugHandler()` at the end of your `love.draw` function:
+To enable the debug visualization in your project, add a call to `shove.handleDebugKeys()` at the end of your `love.draw` function:
 
 ```lua
 function love.draw()
@@ -917,7 +917,7 @@ function love.draw()
   shove.endDraw()
 
   -- Add debug visualization (must be after shove.endDraw)
-  shove.debugHandler()
+  shove.handleDebugKeys()
 end
 ```
 
@@ -932,13 +932,13 @@ The debug display responds to the following function keys:
 
 #### Custom Integration
 
-If you need different keys or display positions, you can use `shove.debugInfo()` directly:
+If you need different keys or display positions, you can use `shove.showDebugInfo()` directly:
 
 ```lua
 -- In your draw function
 if love.keyboard.isDown("tab") then
   -- Custom position (top-left) and configuration
-  shove.debugInfo(10, 10, {
+  shove.showDebugInfo(10, 10, {
     showLayers = true,
     showPerformance = love.keyboard.isDown("lshift")
   })
@@ -980,8 +980,8 @@ end
 - `shove.getViewportHeight()` - Get viewport height
 - `shove.getViewportDimensions()` - Get viewport dimensions
 - `shove.getViewport()` - Get viewport rectangle in screen coordinates
-- `shove.debugHandler()` - Display debug information
-- `shove.debugInfo(x, y, options)` - Display custom debug information
+- `shove.handleDebugKeys()` - Display debug information
+- `shove.showDebugInfo(x, y, options)` - Display custom debug information
 
 ### Layer Operations
 

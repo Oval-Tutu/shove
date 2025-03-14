@@ -34,6 +34,6 @@ return function()
         )
       shove.endLayer()
     shove.endDraw()
-    shove.debugHandler()
+    shove.handleDebugKeys()
   end
 end
