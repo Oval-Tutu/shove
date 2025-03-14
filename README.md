@@ -31,7 +31,7 @@ function love.load()
     renderMode = "direct" -- "direct" or "layer"
   })
   -- Set up a resizable window
-  shove.setMode(1280, 720, {resizable = true})
+  shove.setWindowMode(1280, 720, {resizable = true})
 end
 
 function love.resize(width, height)
@@ -182,7 +182,7 @@ You can check the current setting at any time with `shove.getScalingFilter()`.
 ## Window Management
 
 Shöve provides wrapper functions for LÖVE's window management.
-Set the window dimensions and properties with automatic resize handling using `shove.setMode(width, height, flags)`.
+Set the window dimensions and properties with automatic resize handling using `shove.setWindowMode(width, height, flags)`.
 
 **💡 NOTE:** For best results, call `shove.setResolution()` before using these window management functions to ensure proper viewport initialization.
 
@@ -190,7 +190,7 @@ Set the window dimensions and properties with automatic resize handling using `s
 ```lua
 -- Create a window half the size of the desktop
 local desktopWidth, desktopHeight = love.window.getDesktopDimensions()
-shove.setMode(desktopWidth * 0.5, desktopHeight * 0.5, {
+shove.setWindowMode(desktopWidth * 0.5, desktopHeight * 0.5, {
   resizable = true,
   vsync = true,
   minwidth = 400,
@@ -198,7 +198,7 @@ shove.setMode(desktopWidth * 0.5, desktopHeight * 0.5, {
 })
 ```
 
-Use `shove.updateMode(width, height, flags)` to change the window size and properties.
+Use `shove.updateWindowMode(width, height, flags)` to change the window size and properties.
 
 ## Render Modes
 
@@ -950,8 +950,8 @@ end
 ### Initialization and Setup
 
 - `shove.setResolution(width, height, options)` - Initialize with game resolution
-- `shove.setMode(width, height, options)` - Set window mode
-- `shove.updateMode(width, height, options)` - Update window mode
+- `shove.setWindowMode(width, height, options)` - Set window mode
+- `shove.updateWindowMode(width, height, options)` - Update window mode
 - `shove.resize(width, height)` - Update when window size changes
 
 ### Drawing Flow
