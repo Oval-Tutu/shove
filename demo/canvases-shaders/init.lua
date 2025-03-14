@@ -49,5 +49,6 @@ return function()
     )
     shove.endLayer()
     shove.endDraw()
+    shove.debugHandler()
   end
 end

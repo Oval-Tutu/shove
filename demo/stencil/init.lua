@@ -46,5 +46,6 @@ return function()
         love.graphics.circle("fill", mouseX, mouseY, 16)
       shove.endLayer()
     shove.endDraw()
+    shove.debugHandler()
   end
 end
