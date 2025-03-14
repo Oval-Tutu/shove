@@ -1,65 +1,48 @@
 return function()
-  local gameWidth, gameHeight = 64, 64
-
-  local windowWidth, windowHeight = love.window.getDesktopDimensions()
-  windowWidth, windowHeight = windowWidth * 0.5, windowHeight * 0.5
-
-  love.window.setMode(windowWidth, windowHeight, { fullscreen = false, resizable = true })
-  shove.initResolution(gameWidth, gameHeight, { fitMethod = "pixel", renderMode = "layer" })
-
   function love.load()
-    time = 0
-    love.graphics.setNewFont(32)
-    background = love.graphics.newImage("low-res/image.png")
-  end
+    local windowWidth, windowHeight = love.window.getDesktopDimensions()
+    love.window.setMode(windowWidth * 0.5, windowHeight * 0.5, { fullscreen = false, resizable = true })
+    love.mouse.setVisible(false)
+    shove.initResolution(960, 540, { fitMethod = "aspect", renderMode = "layer" })
+    nogame = love.graphics.newImage("mask/nogame.png")
+    shove.createLayer("background", { zIndex = 10})
+    shove.createLayer("image_mask")
+    shove.createLayer("image", { zIndex = 20})
+    shove.createLayer("cursor", { zIndex = 30})
 
-  function love.update(dt)
-    time = (time + dt) % 1
+    -- Set the mask for the image
+    shove.setLayerMask("image", "image_mask")
   end
 
   function love.draw()
     shove.beginDraw()
-      -- Draw a black background layer
       shove.beginLayer("background")
         love.graphics.setBackgroundColor(0, 0, 0)
       shove.endLayer()
 
-      -- Draw our mask (a square that moves around in a circular pattern)
-      shove.beginLayer("mask_layer", { stencil = true })
+      -- Create a mask layer
+      shove.beginLayer("image_mask")
         love.graphics.setColor(1, 1, 1)
-        local time = love.timer.getTime() * 3
-        local centerX = shove.getViewportWidth() * 0.5 + math.cos(time) * 20
-        local centerY = shove.getViewportHeight() * 0.5 + math.sin(time) * 20
-        local size = 20 + math.sin(time) * 4  -- Size that varies over time
-        love.graphics.rectangle("fill", centerX - size/2, centerY - size/2, size, size)
+        local time = love.timer.getTime() * 1.5
+        local centerX = shove.getViewportWidth() * 0.5 + math.cos(time) * 325
+        local centerY = shove.getViewportHeight() * 0.5 + math.sin(time) * 90
+        local size = 300 + math.sin(time) * 64
+        love.graphics.rectangle("fill", centerX - size / 2, centerY - size / 2, size, size)
       shove.endLayer()
 
-      -- Set the mask layer for content
-      shove.setLayerMask("content_layer", "mask_layer")
-
-      -- Draw content that will be masked
-      shove.beginLayer("content_layer")
-        love.graphics.draw(background, 0, 0)
+      -- Draw the image that will now be masked
+      shove.beginLayer("image")
+        love.graphics.draw(nogame, 0, 0)
       shove.endLayer()
 
-      -- Draw cursor on a different layer
-      shove.beginLayer("cursor_layer", { zIndex = 100 })
+      local insideViewport, mouseX, mouseY = shove.mouseToViewport()
+      -- If outside the viewport hide the cursor layer
+      -- Invisible layers do not get rendered
+      shove.setLayerVisible("cursor", insideViewport)
+
+      shove.beginLayer("cursor")
         love.graphics.setColor(1, 1, 1)
-        local insideViewport, mouseX, mouseY = shove.mouseToViewport()
-        if insideViewport then
-          love.graphics.points(
-            mouseX,
-            mouseY - 1,
-            mouseX - 1,
-            mouseY,
-            mouseX,
-            mouseY,
-            mouseX + 1,
-            mouseY,
-            mouseX,
-            mouseY + 1
-          )
-        end
+        love.graphics.rectangle("fill", mouseX - 24, mouseY - 24, 24, 24)
       shove.endLayer()
     shove.endDraw()
   end

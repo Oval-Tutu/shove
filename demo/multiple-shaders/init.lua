@@ -1,20 +1,18 @@
 return function()
-  local gameWidth, gameHeight = 1080, 720
-  local windowWidth, windowHeight = love.window.getDesktopDimensions()
-  windowWidth, windowHeight = windowWidth * 0.5, windowHeight * 0.5
-
-  love.window.setMode(windowWidth, windowHeight, { resizable = true })
-  shove.initResolution(gameWidth, gameHeight, { renderMode = "layer" })
-
   function love.load()
-    time = 0
-    image = love.graphics.newImage("multiple-shaders/love.png")
-    shader1 = love.graphics.newShader("multiple-shaders/shader1.fs")
-    shader2 = love.graphics.newShader("multiple-shaders/shader2.fs")
+    local windowWidth, windowHeight = love.window.getDesktopDimensions()
+    love.window.setMode(windowWidth * 0.5, windowHeight * 0.5, { fullscreen = false, resizable = true })
+    shove.initResolution(960, 540, { renderMode = "layer" })
 
+    image = love.graphics.newImage("multiple-shaders/love.png")
+    shader1 = love.graphics.newShader("multiple-shaders/shader1.glsl")
+    shader2 = love.graphics.newShader("multiple-shaders/shader2.glsl")
+
+    shove.createLayer("shaders", { zIndex = 10 })
     -- Add global effects to chain multiple shaders
     shove.addGlobalEffect(shader1)
     shove.addGlobalEffect(shader2)
+    time = 0
   end
 
   function love.update(dt)
@@ -24,9 +22,13 @@ return function()
   end
 
   function love.draw()
-    shove.beginDraw()
+    shove.beginDraw("shaders")
       love.graphics.setBackgroundColor(0, 0, 0)
-      love.graphics.draw(image, (gameWidth - image:getWidth()) * 0.5, (gameHeight - image:getHeight()) * 0.5)
+      love.graphics.draw(
+        image,
+        (shove.getViewportWidth() - image:getWidth()) * 0.5,
+        (shove.getViewportHeight() - image:getHeight()) * 0.5
+      )
     shove.endDraw()
   end
 end

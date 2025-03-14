@@ -1,28 +1,35 @@
 shove = require("shove")
-love.window.setTitle("Press space to switch demo!")
 
-local examples = {
-  "low-res",
-  "single-shader",
-  "multiple-shaders",
-  "mouse-input",
-  "canvases-shaders",
-  "stencil",
-  "mask",
+local demo_index = 1
+local demo_data = {
+  { module = "low-res" },
+  { module = "single-shader" },
+  { module = "multiple-shaders" },
+  { module = "mouse-input" },
+  { module = "canvases-shaders" },
+  { module = "stencil" },
+  { module = "mask" },
 }
-local example = 1
 
-for i = 1, #examples do
-  examples[i] = require(examples[i])
+local demos = {}
+for i, demo in ipairs(demo_data) do
+  demos[i] = require(demo.module)
 end
 
--- Start first example
-local success, err = pcall(function()
-  examples[example]()
-end)
+function demo_title()
+  local current = demo_data[demo_index]
+  local fitMethod = shove.getFitMethod()
+  local renderMode = shove.getRenderMode()
+  local vpWidth, vpHeight = shove.getViewportDimensions()
+  local demo_title = string.format("%s: (%s x %s) [%s / %s]", current.module, vpWidth, vpHeight, fitMethod, renderMode)
+  print(demo_title)
+  love.window.setTitle(demo_title)
+end
 
-if not success then
-  print("Error loading example: " .. tostring(err))
+function demo_load()
+  demos[demo_index]()
+  love.load()
+  demo_title()
 end
 
 function love.resize(w, h)
@@ -31,19 +38,33 @@ end
 
 function love.keypressed(key)
   if key == "space" then
-    -- Switch example
-    example = (example < #examples) and example + 1 or 1
-
-    -- Initialize new example with error handling
-    local success = pcall(function()
-      examples[example]()
-      if love.load then love.load() end
-    end)
+    demo_index = (demo_index < #demos) and demo_index + 1 or 1
+    demo_load()
   elseif key == "f" then
-    -- Activate fullscreen mode
-    love.window.setMode(0, 0, { fullscreen = true, fullscreentype = "desktop" })
-    shove.resize(love.graphics.getDimensions())
+    love.window.setFullscreen(not love.window.getFullscreen())
+  elseif key == "a" then
+    shove.setFitMethod("aspect")
+    demo_title()
+  elseif key == "s" then
+    shove.setFitMethod("stretch")
+    demo_title()
+  elseif key == "p" then
+    shove.setFitMethod("pixel")
+    demo_title()
+  elseif key == "n" then
+    shove.setFitMethod("none")
+    demo_title()
+  elseif key == "d" then
+    shove.setRenderMode("direct")
+    demo_title()
+  elseif key == "l" then
+    shove.setRenderMode("layer")
+    demo_title()
+  elseif key == "r" then
+    demo_load()
   elseif key == "escape" and love.system.getOS() ~= "Web" then
     love.event.quit()
   end
 end
+
+demo_load()
