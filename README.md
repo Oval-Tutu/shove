@@ -705,7 +705,7 @@ end
 
 ### Drawing to Layers with Callbacks
 
-`drawToLayer()` provides a convenient way to temporarily switch to a different layer, perform drawing operations, and then automatically return to the previous layer - all without disrupting your main drawing flow.
+`drawOnLayer()` provides a convenient way to temporarily switch to a different layer, perform drawing operations, and then automatically return to the previous layer - all without disrupting your main drawing flow.
 It elegantly handles all the layer switching mechanics, allowing you to focus on your drawing code rather than layer management.
 
 How it Works:
@@ -725,7 +725,7 @@ shove.beginDraw()
   shove.endLayer()
 
   -- Draw something to a specialized layer with a callback
-  shove.drawToLayer("particles", function()
+  shove.drawOnLayer("particles", function()
     spawnExplosionParticles(x, y)
   end)
 
@@ -736,7 +736,7 @@ shove.beginDraw()
 shove.endDraw()
 ```
 
-Here are some good use cases for `drawToLayer()`:
+Here are some good use cases for `drawOnLayer()`:
 
 1. **Isolated drawing tasks**: When you need to draw to multiple layers but want to keep your code organized.
 2. **Reusable drawing functions**: Create modular drawing functions that can be applied to any layer.
@@ -991,7 +991,7 @@ end
 - `shove.showLayer(name)` - Show a layer
 - `shove.getLayerMask(name)` - Get the mask of a layer
 - `shove.setLayerMask(name, maskName)` - Set a layer as a mask
-- `shove.drawToLayer(name, drawFunc)` - Draw to a layer with a callback
+- `shove.drawOnLayer(name, drawFunc)` - Draw to a layer with a callback
 - `shove.drawComposite(globalEffects, applyPersistentEffects)` - Composite and draw the current state
 
 ### Effect System

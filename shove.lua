@@ -1079,17 +1079,17 @@ local shove = {
   ---@param name string Layer name
   ---@param drawFunc function Callback function to execute for drawing
   ---@return boolean success Whether drawing was performed
-  drawToLayer = function(name, drawFunc)
+  drawOnLayer = function(name, drawFunc)
     if type(name) ~= "string" then
-      error("shove.drawToLayer: name must be a string", 2)
+      error("shove.drawOnLayer: name must be a string", 2)
     end
 
     if name == "" then
-      error("shove.drawToLayer: name cannot be empty", 2)
+      error("shove.drawOnLayer: name cannot be empty", 2)
     end
 
     if type(drawFunc) ~= "function" then
-      error("shove.drawToLayer: drawFunc must be a function", 2)
+      error("shove.drawOnLayer: drawFunc must be a function", 2)
     end
 
     if state.renderMode ~= "layer" or not state.inDrawMode then
