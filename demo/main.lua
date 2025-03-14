@@ -1,6 +1,7 @@
 shove = require("shove")
 
 local demo_index = 1
+local is_fullscreen = love.window.getFullscreen()
 local demo_data = {
   { module = "low-res" },
   { module = "single-shader" },
@@ -29,6 +30,7 @@ end
 function demo_load()
   demos[demo_index]()
   love.load()
+  love.window.setFullscreen(is_fullscreen)
   demo_title()
 end
 
@@ -41,7 +43,8 @@ function love.keypressed(key)
     demo_index = (demo_index < #demos) and demo_index + 1 or 1
     demo_load()
   elseif key == "f" then
-    love.window.setFullscreen(not love.window.getFullscreen())
+    is_fullscreen = not is_fullscreen
+    love.window.setFullscreen(is_fullscreen)
   elseif key == "a" then
     shove.setFitMethod("aspect")
     demo_title()
