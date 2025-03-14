@@ -3,6 +3,7 @@ shove = require("shove")
 local demo_index = 1
 local is_fullscreen = love.window.getFullscreen()
 local demo_data = {
+  --{ module = "no-shove" },
   { module = "low-res" },
   { module = "single-shader" },
   { module = "multiple-shaders" },
@@ -38,10 +39,21 @@ function love.resize(w, h)
   shove.resize(w, h)
 end
 
-function love.keypressed(key)
-  if key == "space" then
+-- Helper function for cycling demos
+function cycle_demo(direction)
+  if direction > 0 then
     demo_index = (demo_index < #demos) and demo_index + 1 or 1
-    demo_load()
+  else
+    demo_index = (demo_index > 1) and demo_index - 1 or #demos
+  end
+  demo_load()
+end
+
+function love.keypressed(key)
+  if key == "space" or key == "right" then
+    cycle_demo(1)
+  elseif key == "left" then
+    cycle_demo(-1)
   elseif key == "f" then
     is_fullscreen = not is_fullscreen
     love.window.setFullscreen(is_fullscreen)
