@@ -204,11 +204,16 @@ end
 ---@param effects love.Shader[] Array of shader effects
 local function applyEffects(canvas, effects)
   if not effects or #effects == 0 then
+    -- Already using premultiplied from caller
     love.graphics.draw(canvas)
     return
   end
 
   local shader = love.graphics.getShader()
+  local currentBlendMode, currentAlphaMode = love.graphics.getBlendMode()
+
+  -- Set correct blend mode for canvas drawing
+  love.graphics.setBlendMode("alpha", "premultiplied")
 
   if #effects == 1 then
     love.graphics.setShader(effects[1])
@@ -243,6 +248,7 @@ local function applyEffects(canvas, effects)
   end
 
   love.graphics.setShader(shader)
+  love.graphics.setBlendMode(currentBlendMode, currentAlphaMode)
 end
 
 --- Begin drawing to a specific layer
@@ -305,6 +311,9 @@ local function compositeLayersToScreen(globalEffects, applyPersistentEffects)
     createMaskShader()
   end
 
+  -- Store current blend mode
+  local currentBlendMode, currentAlphaMode = love.graphics.getBlendMode()
+
   -- Prepare composite - add stencil=true to enable stencil operations
   love.graphics.setCanvas({ state.layers.composite.canvas, stencil = true })
   love.graphics.clear()
@@ -328,6 +337,9 @@ local function compositeLayersToScreen(globalEffects, applyPersistentEffects)
           love.graphics.setStencilTest("equal", 1)
         end
       end
+
+      -- Use premultiplied alpha when drawing canvases
+      love.graphics.setBlendMode("alpha", "premultiplied")
 
       -- Apply layer effects or draw directly
       if #layer.effects > 0 then
@@ -367,6 +379,9 @@ local function compositeLayersToScreen(globalEffects, applyPersistentEffects)
       end
     end
 
+    -- Use premultiplied alpha when drawing the composite canvas to screen
+    love.graphics.setBlendMode("alpha", "premultiplied")
+
     if effects and #effects > 0 then
       applyEffects(state.layers.composite.canvas, effects)
     else
@@ -374,6 +389,9 @@ local function compositeLayersToScreen(globalEffects, applyPersistentEffects)
     end
   love.graphics.pop()
   love.graphics.translate(-state.offset_x, -state.offset_y)
+
+  -- Restore original blend mode
+  love.graphics.setBlendMode(currentBlendMode, currentAlphaMode)
 
   return true
 end
