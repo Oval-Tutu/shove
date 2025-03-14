@@ -882,7 +882,7 @@ end
 - `shove.toViewport(x, y)` - Convert screen coordinates to viewport
 - `shove.toScreen(x, y)` - Convert viewport coordinates to screen
 - `shove.mouseToViewport()` - Get mouse position in viewport coordinates
-- `shove.inViewport(x, y)` - Check if coordinates are inside viewport
+- `shove.isInViewport(x, y)` - Check if coordinates are inside viewport
 
 ### Utility Functions
 

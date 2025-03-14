@@ -1182,12 +1182,12 @@ local shove = {
   ---@param x number Screen X coordinate
   ---@param y number Screen Y coordinate
   ---@return boolean inside Whether coordinates are inside viewport
-  inViewport = function(x, y)
+  isInViewport = function(x, y)
     if type(x) ~= "number" then
-      error("shove.inViewport: x must be a number", 2)
+      error("shove.isInViewport: x must be a number", 2)
     end
     if type(y) ~= "number" then
-      error("shove.inViewport: y must be a number", 2)
+      error("shove.isInViewport: y must be a number", 2)
     end
 
     -- If stretch scaling is in use, coords are always in the viewport
