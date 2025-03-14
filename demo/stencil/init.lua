@@ -36,10 +36,10 @@ return function()
         love.graphics.setStencilTest()
       shove.endLayer()
 
-      local insideViewport, mouseX, mouseY = shove.mouseToViewport()
+      local mouseInViewport, mouseX, mouseY = shove.getMouseInViewport()
       -- If outside the viewport hide the cursor layer
       -- Invisible layers do not get rendered
-      if insideViewport then
+      if mouseInViewport then
         shove.showLayer("cursor")
       else
         shove.hideLayer("cursor")

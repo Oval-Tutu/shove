@@ -1095,12 +1095,12 @@ local shove = {
   ---@return boolean inside Whether coordinates are inside viewport
   ---@return number viewX Viewport X coordinate
   ---@return number viewY Viewport Y coordinate
-  toViewport = function(x, y)
+  screenToViewport = function(x, y)
     if type(x) ~= "number" then
-      error("shove.toViewport: x must be a number", 2)
+      error("shove.screenToViewport: x must be a number", 2)
     end
     if type(y) ~= "number" then
-      error("shove.toViewport: y must be a number", 2)
+      error("shove.screenToViewport: y must be a number", 2)
     end
 
     x, y = x - state.offset_x, y - state.offset_y
@@ -1119,12 +1119,12 @@ local shove = {
   ---@param y number Viewport Y coordinate
   ---@return number screenX Screen X coordinate
   ---@return number screenY Screen Y coordinate
-  toScreen = function(x, y)
+  viewportToScreen = function(x, y)
     if type(x) ~= "number" then
-      error("shove.toScreen: x must be a number", 2)
+      error("shove.viewportToScreen: x must be a number", 2)
     end
     if type(y) ~= "number" then
-      error("shove.toScreen: y must be a number", 2)
+      error("shove.viewportToScreen: y must be a number", 2)
     end
 
     local screenX = state.offset_x + (state.rendered_width * x) / state.viewport_width
@@ -1136,9 +1136,9 @@ local shove = {
   ---@return boolean inside Whether mouse is inside viewport
   ---@return number mouseX Viewport X coordinate
   ---@return number mouseY Viewport Y coordinate
-  mouseToViewport = function()
+  getMouseInViewport = function()
     local mouseX, mouseY = love.mouse.getPosition()
-    return shove.toViewport(mouseX, mouseY)
+    return shove.screenToViewport(mouseX, mouseY)
   end,
 
   --- Update dimensions when window is resized

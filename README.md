@@ -335,7 +335,7 @@ Shöve provides functions to convert between screen and game viewport coordinate
 ```lua
 function love.mousepressed(screenX, screenY, button)
   -- Convert screen coordinates to viewport coordinates
-  local insideViewport, gameX, gameY = shove.toViewport(screenX, screenY)
+  local insideViewport, gameX, gameY = shove.screenToViewport(screenX, screenY)
 
   if insideViewport then
     -- Mouse is inside the game viewport
@@ -345,7 +345,7 @@ end
 
 -- Get mouse position directly in viewport coordinates
 function love.update(dt)
-  local insideViewport, mouseX, mouseY = shove.mouseToViewport()
+  local insideViewport, mouseX, mouseY = shove.getMouseInViewport()
   if inside then
     player:aimToward(mouseX, mouseY)
   end
@@ -353,7 +353,7 @@ end
 
 -- Convert viewport coordinates back to screen coordinates
 function drawScreenUI()
-  local screenX, screenY = shove.toScreen(playerX, playerY)
+  local screenX, screenY = shove.viewportToScreen(playerX, playerY)
   -- Draw something at the screen position
 end
 ```
@@ -883,10 +883,10 @@ end
 
 ### Coordinate Handling
 
-- `shove.toViewport(x, y)` - Convert screen coordinates to viewport
-- `shove.toScreen(x, y)` - Convert viewport coordinates to screen
-- `shove.mouseToViewport()` - Get mouse position in viewport coordinates
+- `shove.getMouseInViewport()` - Get mouse position in viewport coordinates
 - `shove.isInViewport(x, y)` - Check if coordinates are inside viewport
+- `shove.screenToViewport(x, y)` - Convert screen coordinates to viewport
+- `shove.viewportToScreen(x, y)` - Convert viewport coordinates to screen
 
 ### Utility Functions
 
