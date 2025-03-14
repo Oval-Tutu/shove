@@ -131,19 +131,19 @@ end
 ---@field blendAlphaMode? love.BlendAlphaMode Alpha blend mode (default: "alphamultiply")
 
 --- Create a new layer or return existing one
----@param name string Layer name
+---@param layerName string Layer name
 ---@param options? ShoveLayerOptions Layer configuration options
 ---@return ShoveLayer layer The created or existing layer
-local function createLayer(name, options)
+local function createLayer(layerName, options)
   options = options or {}
 
-  if state.layers.byName[name] then
+  if state.layers.byName[layerName] then
     -- Layer already exists
-    return state.layers.byName[name]
+    return state.layers.byName[layerName]
   end
 
   local layer = {
-    name = name,
+    name = layerName,
     zIndex = options.zIndex or (#state.layers.ordered + 1),
     canvas = love.graphics.newCanvas(state.viewport_width, state.viewport_height),
     visible = options.visible ~= false, -- Default to visible
@@ -154,7 +154,7 @@ local function createLayer(name, options)
     maskLayer = nil
   }
 
-  state.layers.byName[name] = layer
+  state.layers.byName[layerName] = layer
   table.insert(state.layers.ordered, layer)
 
   -- Sort by zIndex
@@ -166,17 +166,17 @@ local function createLayer(name, options)
 end
 
 --- Get a layer by name
----@param name string Layer name
+---@param layerName string Layer name
 ---@return ShoveLayer|nil layer The requested layer or nil if not found
-local function getLayer(name)
-  return state.layers.byName[name]
+local function getLayer(layerName)
+  return state.layers.byName[layerName]
 end
 
 --- Set the currently active layer
----@param name string Layer name
+---@param layerName string Layer name
 ---@return boolean success Whether the layer was found and set active
-local function setActiveLayer(name)
-  local layer = getLayer(name)
+local function setActiveLayer(layerName)
+  local layer = getLayer(layerName)
   if not layer then
     return false
   end
@@ -254,17 +254,17 @@ local function applyEffects(canvas, effects)
 end
 
 --- Begin drawing to a specific layer
----@param name string Layer name
+---@param layerName string Layer name
 ---@return boolean success Whether the layer was successfully activated
-local function beginLayerDraw(name)
+local function beginLayerDraw(layerName)
   if state.renderMode ~= "layer" then
     return false
   end
 
-  local layer = getLayer(name)
+  local layer = getLayer(layerName)
   if not layer then
     -- Create layer if it doesn't exist
-    layer = createLayer(name)
+    layer = createLayer(layerName)
   end
 
   -- Set as current layer and activate canvas
@@ -705,21 +705,21 @@ local shove = {
   -- Layer management API
 
   --- Create a new layer
-  ---@param name string Layer name
+  ---@param layerName string Layer name
   ---@param options? ShoveLayerOptions Layer configuration options
   ---@return ShoveLayer layer The created layer
-  createLayer = function(name, options)
-    if type(name) ~= "string" then
-      error("shove.createLayer: name must be a string", 2)
+  createLayer = function(layerName, options)
+    if type(layerName) ~= "string" then
+      error("shove.createLayer: layerName must be a string", 2)
     end
 
-    if name == "" then
-      error("shove.createLayer: name cannot be empty", 2)
+    if layerName == "" then
+      error("shove.createLayer: layerName cannot be empty", 2)
     end
 
     -- Check for reserved names
-    if name == "_composite" or name == "_tmp" then
-      error("shove.createLayer: '"..name.."' is a reserved layer name", 2)
+    if layerName == "_composite" or layerName == "_tmp" then
+      error("shove.createLayer: '"..layerName.."' is a reserved layer name", 2)
     end
 
     -- Validate options if provided
@@ -762,55 +762,55 @@ local shove = {
       end
     end
 
-    return createLayer(name, options)
+    return createLayer(layerName, options)
   end,
 
   --- Remove a layer
-  ---@param name string Layer name
+  ---@param layerName string Layer name
   ---@return boolean success Whether layer was removed
-  removeLayer = function(name)
-    if type(name) ~= "string" then
-      error("shove.removeLayer: name must be a string", 2)
+  removeLayer = function(layerName)
+    if type(layerName) ~= "string" then
+      error("shove.removeLayer: layerName must be a string", 2)
     end
 
-    if name == "" then
-      error("shove.removeLayer: name cannot be empty", 2)
+    if layerName == "" then
+      error("shove.removeLayer: layerName cannot be empty", 2)
     end
 
-    if name == "_composite" or not state.layers.byName[name] then
+    if layerName == "_composite" or not state.layers.byName[layerName] then
       return false
     end
 
     -- Reset active layer if needed
-    if state.layers.active == state.layers.byName[name] then
+    if state.layers.active == state.layers.byName[layerName] then
       state.layers.active = nil
     end
 
     -- Remove from collections
     for i, layer in ipairs(state.layers.ordered) do
-      if layer.name == name then
+      if layer.name == layerName then
         table.remove(state.layers.ordered, i)
         break
       end
     end
 
-    state.layers.byName[name] = nil
+    state.layers.byName[layerName] = nil
     return true
   end,
 
   --- Check if a layer exists
-  ---@param name string Layer name
+  ---@param layerName string Layer name
   ---@return boolean exists Whether the layer exists
-  hasLayer = function(name)
-    if type(name) ~= "string" then
-      error("shove.hasLayer: name must be a string", 2)
+  hasLayer = function(layerName)
+    if type(layerName) ~= "string" then
+      error("shove.hasLayer: layerName must be a string", 2)
     end
 
-    if name == "" then
-      error("shove.hasLayer: name cannot be empty", 2)
+    if layerName == "" then
+      error("shove.hasLayer: layerName cannot be empty", 2)
     end
 
-    return state.layers.byName[name] ~= nil
+    return state.layers.byName[layerName] ~= nil
   end,
 
 --- Set the blend mode for a layer
@@ -872,24 +872,24 @@ local shove = {
   end,
 
   --- Set the z-index order of a layer
-  ---@param name string Layer name
+  ---@param layerName string Layer name
   ---@param zIndex number Z-order position
   ---@return boolean success Whether the layer order was changed
-  setLayerOrder = function(name, zIndex)
-    if type(name) ~= "string" then
-      error("shove.setLayerOrder: name must be a string", 2)
+  setLayerOrder = function(layerName, zIndex)
+    if type(layerName) ~= "string" then
+      error("shove.setLayerOrder: layerName must be a string", 2)
     end
 
-    if name == "" then
-      error("shove.setLayerOrder: name cannot be empty", 2)
+    if layerName == "" then
+      error("shove.setLayerOrder: layerName cannot be empty", 2)
     end
 
     if type(zIndex) ~= "number" then
       error("shove.setLayerOrder: zIndex must be a number", 2)
     end
 
-    local layer = getLayer(name)
-    if not layer or name == "_composite" then
+    local layer = getLayer(layerName)
+    if not layer or layerName == "_composite" then
       return false
     end
 
@@ -904,35 +904,35 @@ local shove = {
   end,
 
   --- Get the z-index order of a layer
-  ---@param name string Layer name
+  ---@param layerName string Layer name
   ---@return number|nil zIndex Z-order position, or nil if layer doesn't exist
-  getLayerOrder = function(name)
-    if type(name) ~= "string" then
-      error("shove.getLayerOrder: name must be a string", 2)
+  getLayerOrder = function(layerName)
+    if type(layerName) ~= "string" then
+      error("shove.getLayerOrder: layerName must be a string", 2)
     end
 
-    if name == "" then
-      error("shove.getLayerOrder: name cannot be empty", 2)
+    if layerName == "" then
+      error("shove.getLayerOrder: layerName cannot be empty", 2)
     end
 
-    local layer = getLayer(name)
+    local layer = getLayer(layerName)
     if not layer then return nil end
     return layer.zIndex
   end,
 
 --- Show a layer (make it visible)
----@param name string Layer name
+---@param layerName string Layer name
 ---@return boolean success Whether the layer visibility was changed
-  showLayer = function(name)
-    if type(name) ~= "string" then
-      error("shove.showLayer: name must be a string", 2)
+  showLayer = function(layerName)
+    if type(layerName) ~= "string" then
+      error("shove.showLayer: layerName must be a string", 2)
     end
 
-    if name == "" then
-      error("shove.showLayer: name cannot be empty", 2)
+    if layerName == "" then
+      error("shove.showLayer: layerName cannot be empty", 2)
     end
 
-    local layer = getLayer(name)
+    local layer = getLayer(layerName)
     if not layer then
       return false
     end
@@ -942,18 +942,18 @@ local shove = {
   end,
 
 --- Hide a layer (make it invisible)
----@param name string Layer name
+---@param layerName string Layer name
 ---@return boolean success Whether the layer visibility was changed
-  hideLayer = function(name)
-    if type(name) ~= "string" then
-      error("shove.hideLayer: name must be a string", 2)
+  hideLayer = function(layerName)
+    if type(layerName) ~= "string" then
+      error("shove.hideLayer: layerName must be a string", 2)
     end
 
     if name == "" then
-      error("shove.hideLayer: name cannot be empty", 2)
+      error("shove.hideLayer: layerName cannot be empty", 2)
     end
 
-    local layer = getLayer(name)
+    local layer = getLayer(layerName)
     if not layer then
       return false
     end
@@ -963,51 +963,51 @@ local shove = {
   end,
 
   --- Check if a layer is visible
-  ---@param name string Layer name
+  ---@param layerName string Layer name
   ---@return boolean|nil isVisible Whether the layer is visible, or nil if layer doesn't exist
-  isLayerVisible = function(name)
-    if type(name) ~= "string" then
-      error("shove.isLayerVisible: name must be a string", 2)
+  isLayerVisible = function(layerName)
+    if type(layerName) ~= "string" then
+      error("shove.isLayerVisible: layerName must be a string", 2)
     end
 
-    if name == "" then
-      error("shove.isLayerVisible: name cannot be empty", 2)
+    if layerName == "" then
+      error("shove.isLayerVisible: layerName cannot be empty", 2)
     end
 
-    local layer = getLayer(name)
+    local layer = getLayer(layerName)
     if not layer then return nil end
     return layer.visible
   end,
 
 --- Get the mask layer used by a layer
----@param name string Layer name
+---@param layerName string Layer name
 ---@return string|nil maskName Name of the mask layer, or nil if no mask or layer doesn't exist
-  getLayerMask = function(name)
-    if type(name) ~= "string" then
-      error("shove.getLayerMask: name must be a string", 2)
+  getLayerMask = function(layerName)
+    if type(layerName) ~= "string" then
+      error("shove.getLayerMask: layerName must be a string", 2)
     end
 
-    if name == "" then
-      error("shove.getLayerMask: name cannot be empty", 2)
+    if layerName == "" then
+      error("shove.getLayerMask: layerName cannot be empty", 2)
     end
 
-    local layer = getLayer(name)
+    local layer = getLayer(layerName)
     if not layer then return nil end
 
     return layer.maskLayer
   end,
 
   --- Set a mask for a layer
-  ---@param name string Layer name
+  ---@param layerName string Layer name
   ---@param maskName string|nil Name of layer to use as mask, or nil to clear mask
   ---@return boolean success Whether the mask was set
-  setLayerMask = function(name, maskName)
-    if type(name) ~= "string" then
-      error("shove.setLayerMask: name must be a string", 2)
+  setLayerMask = function(layerName, maskName)
+    if type(layerName) ~= "string" then
+      error("shove.setLayerMask: layerName must be a string", 2)
     end
 
-    if name == "" then
-      error("shove.setLayerMask: name cannot be empty", 2)
+    if layerName == "" then
+      error("shove.setLayerMask: layerName cannot be empty", 2)
     end
 
     if maskName ~= nil and type(maskName) ~= "string" then
@@ -1018,7 +1018,7 @@ local shove = {
       error("shove.setLayerMask: maskName cannot be empty", 2)
     end
 
-    local layer = getLayer(name)
+    local layer = getLayer(layerName)
     if not layer then
       return false
     end
@@ -1038,18 +1038,18 @@ local shove = {
   end,
 
   --- Begin drawing to a layer
-  ---@param name string Layer name
+  ---@param layerName string Layer name
   ---@return boolean success Whether the layer was activated
-  beginLayer = function(name)
-    if type(name) ~= "string" then
-      error("shove.beginLayer: name must be a string", 2)
+  beginLayer = function(layerName)
+    if type(layerName) ~= "string" then
+      error("shove.beginLayer: layerName must be a string", 2)
     end
 
-    if name == "" then
-      error("shove.beginLayer: name cannot be empty", 2)
+    if layerName == "" then
+      error("shove.beginLayer: layerName cannot be empty", 2)
     end
 
-    return beginLayerDraw(name)
+    return beginLayerDraw(layerName)
   end,
 
   --- End drawing to current layer
@@ -1076,16 +1076,16 @@ local shove = {
   end,
 
   --- Draw to a specific layer using a callback function
-  ---@param name string Layer name
+  ---@param layerName string Layer name
   ---@param drawFunc function Callback function to execute for drawing
   ---@return boolean success Whether drawing was performed
-  drawOnLayer = function(name, drawFunc)
-    if type(name) ~= "string" then
-      error("shove.drawOnLayer: name must be a string", 2)
+  drawOnLayer = function(layerName, drawFunc)
+    if type(layerName) ~= "string" then
+      error("shove.drawOnLayer: layerName must be a string", 2)
     end
 
-    if name == "" then
-      error("shove.drawOnLayer: name cannot be empty", 2)
+    if layerName == "" then
+      error("shove.drawOnLayer: layerName cannot be empty", 2)
     end
 
     if type(drawFunc) ~= "function" then
@@ -1100,7 +1100,7 @@ local shove = {
     local previousLayer = state.layers.active
 
     -- Switch to specified layer
-    beginLayerDraw(name)
+    beginLayerDraw(layerName)
 
     -- Execute drawing function
     drawFunc()
