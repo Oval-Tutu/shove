@@ -699,7 +699,7 @@ local shove = {
     -- Reset drawing mode flag
     state.inDrawMode = false
 
-    shove.debug.showMetrics()
+    shove.profiler.renderOverlay()
 
     return true
   end,
@@ -1467,14 +1467,16 @@ do
       originalResize(...)
     end
   end
-  -- Load debug module if available or create stub debug module
-  local success, shoveDebug = pcall(require, "shove-debug")
+  -- Load profiler module or create a stub module
+  local success, shoveProfiler = pcall(require, "shove-profiler")
   if success then
-    shove.debug = shoveDebug
-    shove.debug.init(shove)
+    shove.profiler = shoveProfiler
+    shove.profiler.init(shove)
   else
-    shove.debug = {
-      showMetrics = function() end
+    shove.profiler = {
+      renderOverlay = function() end,
+      registerParticleSystem = function() end,
+      unregisterParticleSystem = function() end
     }
   end
 end
