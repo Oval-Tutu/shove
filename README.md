@@ -888,54 +888,29 @@ function addResizeHandler(handler)
 end
 ```
 
-### Debug Visualization
+### Debug Metrics
 
-Shöve includes a built-in debug overlay that provides real-time information about resolution management, layer status, and rendering performance.
+Shöve includes a built-in debug metrics that provides real-time information about resolution management, layer status, and rendering performance.
 This can help diagnose scaling issues and optimize your game.
 
-#### Integration
-
-To enable the debug visualization in your project, add a call to `shove.handleDebugKeys()` at the end of your `love.draw` function:
+**💡 NOTE!** You can only toggle VSync while the overlay is enabled.
 
 ```lua
-function love.draw()
-  -- Start Shöve rendering
-  shove.beginDraw()
 
-  -- Your game drawing code
-  -- ...
+#### Keyboard Controls
 
-  -- End Shöve rendering
-  shove.endDraw()
+- <kbd>Ctrl</kbd> + <kbd>d</kbd>: Toggle Overlay
+- <kbd>Ctrl</kbd> + <kbd>v</kbd>: Toggle VSync (only when overlay is enabled)
 
-  -- Add debug visualization (must be after shove.endDraw)
-  shove.handleDebugKeys()
-end
-```
+#### Controller Controls
 
-#### Function Keys
+- Select + A: Toggle Overlay
+- Select + B: Toggle VSync
 
-The debug display responds to the following function keys:
+#### Touch Controls
 
-- **F1**: Full debug info (resolution, layers, and performance)
-- **F2**: Basic info + performance metrics
-- **F3**: Basic info + layer details
-- **F4**: Basic resolution information only
-
-#### Custom Integration
-
-If you need different keys or display positions, you can use `shove.showDebugInfo()` directly:
-
-```lua
--- In your draw function
-if love.keyboard.isDown("tab") then
-  -- Custom position (top-left) and configuration
-  shove.showDebugInfo(10, 10, {
-    showLayers = true,
-    showPerformance = love.keyboard.isDown("lshift")
-  })
-end
-```
+- Double Tap top right corner: Toggle Overlay
+- Double Tap the overlay itself: Toggle VSync
 
 ## API Reference
 

@@ -29,6 +29,5 @@ return function()
         (shove.getViewportHeight() - image:getHeight()) * 0.5
       )
     shove.endDraw()
-    shove.handleDebugKeys()
   end
 end

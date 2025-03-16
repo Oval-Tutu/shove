@@ -73,6 +73,5 @@ return function()
         love.graphics.rectangle("fill", mouseX, mouseY - cursorSize, 1, cursorSize * 2 + 1)
       shove.endLayer()
     shove.endDraw()
-    shove.handleDebugKeys()
   end
 end

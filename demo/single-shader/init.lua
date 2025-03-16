@@ -34,6 +34,5 @@ return function()
         )
       shove.endLayer()
     shove.endDraw()
-    shove.handleDebugKeys()
   end
 end
