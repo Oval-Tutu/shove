@@ -10,10 +10,33 @@ Shöve started as a fork of the popular [push](https://github.com/Ulydev/push) l
 
 Shöve was takes the [`dev` branch of push](https://github.com/Ulydev/push/tree/dev) and redesigns the API and builds on its Canvas rendering concept to create a powerful and intuitive library that can handle complex rendering scenarios.
 
-- Create pixel-perfect games that scale beautifully 👾
-- Organize drawing operations logically 📝
-- Apply visual effects with ease ✨
-- Never worry about different screen sizes again 💪
+### Key Features
+
+Shöve offers two render modes:
+
+- **Direct Mode**: Simple scaling and positioning, similar to the original push library
+- **Layer Mode**: Advanced rendering with support for multiple layers, effects, and compositing
+
+#### Complete Resolution Management 📏
+
+- **Multiple Fit Methods**: Choose from aspect-preserving, pixel-perfect, stretch, or no scaling
+- **Dynamic Resizing**: Responds instantly to window/screen changes
+- **Coordinate Conversion**: Seamlessly map between screen and game coordinates
+
+#### Layer-Based Rendering 🥞
+
+- **Layer-Based System**: Organize your rendering into logical layers
+- **Z-Order Control**: Easily change which layers appear on top
+- **Visibility Toggling**: Show or hide entire layers with a single call
+- **Complex UIs**: Put your HUD, menus, dialogs, and tooltips on separate layers for easy management.
+- **Integrated Profiling**: Measure performance and debug rendering issues
+
+#### Effect Pipeline ✨
+
+- **Per-Layer Effects**: Apply shaders to specific layers only
+- **Global Effects**: Transform your entire game with post-processing
+- **Effect Chaining**: Combine multiple shaders for complex visual styles
+- **Smart Masking**: Use any layer as a mask for another
 
 Shöve has a clean API with with consistent naming patterns that offers a **progressive learning curve where you can start simple, add complexity as needed**. ‍🧑‍🎓
 
@@ -26,17 +49,12 @@ shove = require("shove")
 
 function love.load()
   -- Initialize Shöve with fixed game resolution and options
-  shove.setResolution(800, 600, {
+  shove.setResolution(960, 540, {
     fitMethod = "pixel", -- "pixel", "aspect", "stretch", or "none"
     renderMode = "direct" -- "direct" or "layer"
   })
   -- Set up a resizable window
   shove.setWindowMode(1280, 720, {resizable = true})
-end
-
-function love.resize(width, height)
-  -- Update Shöve when window/screen size changes
-  shove.resize(width, height)
 end
 
 function love.draw()
@@ -50,33 +68,6 @@ end
 You can now draw your game at a fixed resolution and have it scale to fit the window.
 
 **💡 NOTE!** That is all you need to get started! **Everything else that follows is optional**, but very tasty 👅
-
-## Key Features
-
-Shöve offers two render modes:
-
-- **Direct Mode**: Simple scaling and positioning, similar to the original push library
-- **Layer Mode**: Advanced rendering with support for multiple layers, effects, and compositing
-
-### Complete Resolution Management 📏
-
-- **Multiple Fit Methods**: Choose from aspect-preserving, pixel-perfect, stretch, or no scaling
-- **Dynamic Resizing**: Responds instantly to window/screen changes
-- **Coordinate Conversion**: Seamlessly map between screen and game coordinates
-
-### Layer-Based Rendering 🥞
-
-- **Layer-Based System**: Organize your rendering into logical layers
-- **Z-Order Control**: Easily change which layers appear on top
-- **Visibility Toggling**: Show or hide entire layers with a single call
-- **Complex UIs**: Put your HUD, menus, dialogs, and tooltips on separate layers for easy management.
-
-### Effect Pipeline ✨
-
-- **Per-Layer Effects**: Apply shaders to specific layers only
-- **Global Effects**: Transform your entire game with post-processing
-- **Effect Chaining**: Combine multiple shaders for complex visual styles
-- **Smart Masking**: Use any layer as a mask for another
 
 # Demo ️🕹️
 
@@ -211,7 +202,7 @@ It's suitable for games that don't need advanced rendering features.
 
 ```lua
 -- Initialize with direct rendering mode
-shove.setResolution(800, 600, {renderMode = "direct"})
+shove.setResolution(960, 540, {renderMode = "direct"})
 
 function love.draw()
   shove.beginDraw()
