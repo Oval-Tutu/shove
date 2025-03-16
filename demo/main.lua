@@ -35,10 +35,6 @@ function demo_load()
   demo_title()
 end
 
-function love.resize(w, h)
-  shove.resize(w, h)
-end
-
 -- Helper function for cycling demos
 function cycle_demo(direction)
   if direction > 0 then
@@ -57,26 +53,6 @@ function love.keypressed(key)
   elseif key == "f" then
     is_fullscreen = not is_fullscreen
     love.window.setFullscreen(is_fullscreen)
-  elseif key == "a" then
-    shove.setFitMethod("aspect")
-    demo_title()
-  elseif key == "s" then
-    shove.setFitMethod("stretch")
-    demo_title()
-  elseif key == "p" then
-    shove.setFitMethod("pixel")
-    demo_title()
-  elseif key == "n" then
-    shove.setFitMethod("none")
-    demo_title()
-  elseif key == "d" then
-    shove.setRenderMode("direct")
-    demo_title()
-  elseif key == "l" then
-    shove.setRenderMode("layer")
-    demo_title()
-  elseif key == "r" then
-    demo_load()
   elseif key == "escape" and love.system.getOS() ~= "Web" then
     love.event.quit()
   end

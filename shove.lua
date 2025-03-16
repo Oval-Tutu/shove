@@ -699,6 +699,8 @@ local shove = {
     -- Reset drawing mode flag
     state.inDrawMode = false
 
+    shove.debug.showMetrics()
+
     return true
   end,
 
@@ -1413,220 +1415,10 @@ local shove = {
     return true
   end,
 
---- Display debug information about the current state of Shove
----@param x number|nil X position for debug display (default: 10)
----@param y number|nil Y position for debug display (default: 10)
----@param options table|nil Options for display {showLayers = false, showPerformance = false}
----@return nil
-  showDebugInfo = function(x, y, options)
-    if x ~= nil and type(x) ~= "number" then
-      error("shove.showDebugInfo: x must be a number or nil", 2)
-    end
-
-    if y ~= nil and type(y) ~= "number" then
-      error("shove.showDebugInfo: y must be a number or nil", 2)
-    end
-
-    if options ~= nil and type(options) ~= "table" and type(options) ~= "boolean" then
-      error("shove.showDebugInfo: options must be a table, boolean, or nil", 2)
-    end
-
-    -- Default position in top-left corner with small margin
-    x = x or 10
-    y = y or 10
-
-    -- Handle backwards compatibility and options
-    local showLayers, showPerformance = false, false
-    if type(options) == "boolean" then
-      -- Old style: third param was just showLayers
-      showLayers = options
-    elseif type(options) == "table" then
-      -- New style: options table
-      showLayers = options.showLayers or false
-      showPerformance = options.showPerformance or false
-    end
-
-    -- Save current graphics state
-    local r, g, b, a = love.graphics.getColor()
-    local font = love.graphics.getFont()
-    local blendMode, blendAlphaMode = love.graphics.getBlendMode()
-
-    -- Set a consistent debug font
-    local debugFont = love.graphics.newFont(12)
-    love.graphics.setFont(debugFont)
-
-    -- Calculate panel height based on what's being shown
-    local panelWidth = 230
-    local panelHeight = 190
-
-    if showLayers and state.renderMode == "layer" then
-      panelHeight = panelHeight + 190 -- Extra space for layers
-    end
-
-    if showPerformance then
-      panelHeight = panelHeight + 120 -- Extra space for performance stats
-    end
-
-    -- Background panel
-    love.graphics.setColor(0, 0, 0, 0.7)
-    love.graphics.rectangle("fill", x, y, panelWidth, panelHeight)
-
-    -- Border
-    love.graphics.setColor(0.4, 0.4, 0.4, 1)
-    love.graphics.rectangle("line", x, y, panelWidth, panelHeight)
-
-    -- Header
-    love.graphics.setColor(0.7, 0.9, 1, 1)
-    love.graphics.print("Shöve " .. shove._VERSION.string, x + 10, y + 10)
-
-    -- Reset text color
-    love.graphics.setColor(1, 1, 1, 1)
-
-    -- Build debug text with basic info
-    local info = {
-      string.format("Fit Method: %s", state.fitMethod),
-      string.format("Render Mode: %s", state.renderMode),
-      string.format("Scaling Filter: %s", state.scalingFilter),
-      "",
-      string.format("Window: %d x %d", state.screen_width, state.screen_height),
-      string.format("Viewport: %d x %d", state.viewport_width, state.viewport_height),
-      string.format("Rendered: %d x %d", state.rendered_width, state.rendered_height),
-      "",
-      string.format("Scale: %.3f x %.3f", state.scale_x, state.scale_y),
-      string.format("Offset: %d x %d", state.offset_x, state.offset_y)
-    }
-
-    -- Draw basic info
-    local lineHeight = 15
-    local currentY = y + 25
-    for i, line in ipairs(info) do
-      love.graphics.print(line, x + 10, currentY + (i-1) * lineHeight)
-    end
-    currentY = currentY + #info * lineHeight + 10
-
-    -- Draw performance info if requested
-    if showPerformance then
-      -- Get LÖVE graphics stats
-      local stats = love.graphics.getStats()
-
-      -- Performance header
-      love.graphics.setColor(0.7, 0.9, 1, 1)
-      love.graphics.print("Performance:", x + 10, currentY)
-      love.graphics.setColor(1, 1, 1, 1)
-      currentY = currentY + lineHeight
-
-      local currentFPS = love.timer.getFPS()
-      love.graphics.print(string.format("FPS: %d", currentFPS), x + 10, currentY)
-      currentY = currentY + lineHeight
-
-      -- Add frame time (time between frames)
-      local frameDelta = love.timer.getDelta() * 1000 -- Convert to milliseconds
-      love.graphics.print(string.format("Frame Time: %.2f ms", frameDelta), x + 10, currentY)
-      currentY = currentY + lineHeight
-
-      -- Canvas stats
-      love.graphics.print(string.format("Canvases: %d", stats.canvases), x + 10, currentY)
-      currentY = currentY + lineHeight
-
-      -- Canvas switch stats
-      love.graphics.print(string.format("Canvas Switches: %d", stats.canvasswitches), x + 10, currentY)
-      currentY = currentY + lineHeight
-
-      -- Shader switch stats
-      love.graphics.print(string.format("Shader Switches: %d", stats.shaderswitches), x + 10, currentY)
-      currentY = currentY + lineHeight
-
-      -- Draw call stats
-      love.graphics.print(string.format("Draw Calls: %d (%d batched)",
-        stats.drawcalls, stats.drawcallsbatched), x + 10, currentY)
-      currentY = currentY + lineHeight
-
-      -- Texture memory stats
-      local textureMemoryMB = stats.texturememory / (1024 * 1024)
-      love.graphics.print(string.format("VRAM: %.1f MB", textureMemoryMB), x + 10, currentY)
-      currentY = currentY + lineHeight
-
-      currentY = currentY + 5 -- Add a small gap
-    end
-
-    -- Draw layer info if requested
-    if showLayers and state.renderMode == "layer" then
-      -- Section header
-      love.graphics.setColor(0.7, 0.9, 1, 1)
-      love.graphics.print("Layers:", x + 10, currentY)
-      love.graphics.setColor(1, 1, 1, 1)
-      currentY = currentY + lineHeight
-
-      -- Count layers
-      local layerCount = 0
-      for _ in pairs(state.layers.byName) do layerCount = layerCount + 1 end
-
-      love.graphics.print(string.format("Count: %d", layerCount), x + 10, currentY)
-      currentY = currentY + lineHeight
-
-      -- Display active layer
-      local activeName = state.layers.active and state.layers.active.name or "none"
-      love.graphics.print(string.format("Active: %s", activeName), x + 10, currentY)
-      currentY = currentY + lineHeight
-
-      -- List all layers
-      love.graphics.print("Ordered layers:", x + 10, currentY)
-      currentY = currentY + lineHeight
-
-      for i, layer in ipairs(state.layers.ordered) do
-        if layer.name ~= "_composite" and layer.name ~= "_tmp" then
-          local visibility = layer.visible and "y" or "n"
-          local layerInfo = string.format(
-            "%d: %s [%s] %s/%s",
-            layer.zIndex,
-            layer.name,
-            visibility,
-            layer.blendMode,
-            layer.blendAlphaMode:sub(1,4) -- Shortened for display
-          )
-
-          -- Highlight active layer
-          if state.layers.active and layer.name == state.layers.active.name then
-            love.graphics.setColor(1, 1, 0, 1)
-          else
-            love.graphics.setColor(1, 1, 1, 1)
-          end
-
-          love.graphics.print(layerInfo, x + 15, currentY)
-          currentY = currentY + lineHeight
-        end
-      end
-    end
-
-    -- Restore graphics state
-    love.graphics.setColor(r, g, b, a)
-    love.graphics.setFont(font)
-    love.graphics.setBlendMode(blendMode, blendAlphaMode)
-  end,
-
-  --- Handle displaying debug information based on function key presses
-  --- F1: Full debug with layers and performance
-  --- F2: Basic info with performance
-  --- F3: Basic info with layers
-  --- F4: Basic info only
-  ---@return nil
-  handleDebugKeys = function()
-    local debugX = love.graphics.getWidth() - 240
-    local debugY = 10
-
-    if love.keyboard.isDown("f1") then
-      -- Show full debug info including layers and performance when F1 is pressed
-      shove.showDebugInfo(debugX, debugY, {showLayers = true, showPerformance = true})
-    elseif love.keyboard.isDown("f2") then
-      -- Show basic debug info + performance when F2 is pressed
-      shove.showDebugInfo(debugX, debugY, {showPerformance = true})
-    elseif love.keyboard.isDown("f3") then
-      -- Show only layer info when F3 is pressed
-      shove.showDebugInfo(debugX, debugY, {showLayers = true})
-    elseif love.keyboard.isDown("f4") then
-      -- Show basic debug info when F4 is pressed
-      shove.showDebugInfo(debugX, debugY)
-    end
+--- Get the current resize callback function
+---@return function|nil callback The current resize callback or nil if none is set
+  getResizeCallback = function()
+    return state.resizeCallback
   end,
 
 --- Set a callback function to be called after resize operations
@@ -1641,11 +1433,50 @@ local shove = {
     return true
   end,
 
---- Get the current resize callback function
----@return function|nil callback The current resize callback or nil if none is set
-  getResizeCallback = function()
-    return state.resizeCallback
-  end,
+  --- Return a copy of relevant state data for debug metrics
+  getState = function()
+    return {
+      fitMethod = state.fitMethod,
+      renderMode = state.renderMode,
+      scalingFilter = state.scalingFilter,
+      screen_width = state.screen_width,
+      screen_height = state.screen_height,
+      viewport_width = state.viewport_width,
+      viewport_height = state.viewport_height,
+      rendered_width = state.rendered_width,
+      rendered_height = state.rendered_height,
+      scale_x = state.scale_x,
+      scale_y = state.scale_y,
+      offset_x = state.offset_x,
+      offset_y = state.offset_y,
+      layers = state.renderMode == "layer" and {
+        count = #state.layers.ordered,
+        active = state.layers.active and state.layers.active.name or nil,
+        ordered = state.layers.ordered -- Reference, not a deep copy
+      } or nil
+    }
+  end
 }
+
+do
+  -- Hook into love.resize()
+  local originalResize = love.handlers["resize"]
+  love.handlers["resize"] = function(...)
+    shove.resize(...)
+    if originalResize then
+      originalResize(...)
+    end
+  end
+  -- Load debug module if available or create stub debug module
+  local success, shoveDebug = pcall(require, "shove-debug")
+  if success then
+    shove.debug = shoveDebug
+    shove.debug.init(shove)
+  else
+    shove.debug = {
+      showMetrics = function() end
+    }
+  end
+end
 
 return shove
