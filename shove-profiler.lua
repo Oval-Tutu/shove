@@ -1,6 +1,3 @@
-local _fontSize = 18
-local _font = love.graphics.newFont(_fontSize)
-
 ---@class ShoveProfiler
 ---@field shove table Reference to the main Shöve instance
 ---@field config table Configuration settings
@@ -13,9 +10,20 @@ local shoveProfiler = {
   shove = nil,
   -- Configuration settings
   config = {
-    fontSize = _fontSize,
-    lineHeight = _fontSize + 4,
-    font = _font,
+    sizes = {
+      default = {
+        fontSize = 18,
+        lineHeight = 22, -- fontSize + 4
+        panelWidth = 320,
+        padding = 10
+      },
+      large = {
+        fontSize = 26,
+        lineHeight = 30, -- fontSize + 4
+        panelWidth = 480,
+        padding = 15
+      }
+    },
     collectionInterval = 0.2,
     colors = {
       red = { 1, 0.5, 0.5, 1 },
@@ -28,8 +36,10 @@ local shoveProfiler = {
     panel = {
       width = 320,
       padding = 10,
-      height = 0, -- Will be calculated dynamically
-    }
+      height = 0,
+      borderWidth = 5,
+    },
+    fonts = {}
   },
   -- State for overlay visibility and tracking
   state = {
@@ -37,6 +47,7 @@ local shoveProfiler = {
     isVsyncEnabled = love.window.getVSync(),
     lastCollectionTime = 0,
     lastEventPushTime = 0,
+    currentSizePreset = "default",
   },
   -- Metrics data containers
   metrics = {},
@@ -56,9 +67,26 @@ local shoveProfiler = {
       lastTapTime = 0,
       doubleTapThreshold = 0.5,
       overlayArea = {x=0, y=0, width=0, height=0},
+      lastBorderTapTime = 0,
+      lastBorderTapPosition = {x=0, y=0},
     }
   }
 }
+
+-- Initialize fonts for both size presets
+local function initializeFonts()
+  for sizeKey, sizeData in pairs(shoveProfiler.config.sizes) do
+    shoveProfiler.config.fonts[sizeKey] = love.graphics.newFont(sizeData.fontSize)
+  end
+  shoveProfiler.config.font = shoveProfiler.config.fonts["default"]
+end
+
+-- Initialize with default size preset
+local currentSize = shoveProfiler.config.sizes[shoveProfiler.state.currentSizePreset]
+shoveProfiler.config.fontSize = currentSize.fontSize
+shoveProfiler.config.lineHeight = currentSize.lineHeight
+shoveProfiler.config.panel.width = currentSize.panelWidth
+shoveProfiler.config.panel.padding = currentSize.padding
 
 -- Cache for displayed information
 ---@type string[]
@@ -73,6 +101,10 @@ local cachedLayerInfo = {}
 --- Update panel dimensions based on current metrics data
 ---@return nil
 local function updatePanelDimensions()
+  -- Use the current size preset for panel calculations
+  local currentSizePreset = shoveProfiler.state.currentSizePreset
+  local currentSize = shoveProfiler.config.sizes[currentSizePreset]
+
   -- Calculate panel height based on content
   local contentHeight = (#cachedShoveInfo + #cachedHardwareInfo + #cachedPerformanceInfo) * shoveProfiler.config.lineHeight
 
@@ -96,6 +128,30 @@ local function updatePanelDimensions()
     width = shoveProfiler.config.panel.width,
     height = contentHeight
   }
+end
+
+--- Toggle between size presets
+---@return nil
+local function toggleSizePreset()
+  if not shoveProfiler.state.isOverlayVisible then return end
+
+  -- Toggle between default and large
+  local newPreset = shoveProfiler.state.currentSizePreset == "default" and "large" or "default"
+  shoveProfiler.state.currentSizePreset = newPreset
+
+  -- Update current size properties
+  local size = shoveProfiler.config.sizes[newPreset]
+  shoveProfiler.config.fontSize = size.fontSize
+  shoveProfiler.config.lineHeight = size.lineHeight
+  shoveProfiler.config.panel.width = size.panelWidth
+  shoveProfiler.config.panel.padding = size.padding
+
+  -- Update font
+  shoveProfiler.config.font = shoveProfiler.config.fonts[newPreset]
+
+  -- Recalculate panel dimensions and refresh metrics
+  updatePanelDimensions()
+  love.event.push("shove_collect_metrics")
 end
 
 --- Sets up LÖVE event handlers for the profiler
@@ -240,6 +296,11 @@ function shoveProfiler.init(shoveRef)
   end
   -- Store Shöve reference
   shoveProfiler.shove = shoveRef
+
+  -- Initialize fonts if not already done
+  if next(shoveProfiler.config.fonts) == nil then
+    initializeFonts()
+  end
 
   setupEventHandlers()
   collectStaticMetrics()
@@ -393,6 +454,31 @@ local function toggleVSync()
   love.window.setVSync(shoveProfiler.state.isVsyncEnabled)
 end
 
+--- Checks if a touch position is on the panel border
+---@param x number Touch x-coordinate
+---@param y number Touch y-coordinate
+---@return boolean isOnBorder True if touch is on the panel border
+local function isTouchOnPanelBorder(x, y)
+  if not shoveProfiler.state.isOverlayVisible then return false end
+  if type(x) ~= "number" or type(y) ~= "number" then return false end
+
+  local area = shoveProfiler.input.touch.overlayArea
+  local borderWidth = shoveProfiler.config.panel.borderWidth
+
+  -- Check if touch is within border area (outer edge minus inner area)
+  local isWithinOuterBounds = x >= area.x - borderWidth and
+                             x <= area.x + area.width + borderWidth and
+                             y >= area.y - borderWidth and
+                             y <= area.y + area.height + borderWidth
+
+  local isWithinInnerBounds = x > area.x + borderWidth and
+                             x < area.x + area.width - borderWidth and
+                             y > area.y + borderWidth and
+                             y < area.y + area.height - borderWidth
+
+  return isWithinOuterBounds and not isWithinInnerBounds
+end
+
 --- Detects if a touch/click position is inside the corner activation area
 ---@param x number Touch/click x-coordinate
 ---@param y number Touch/click y-coordinate
@@ -445,6 +531,11 @@ function shoveProfiler.gamepadpressed(joystick, button)
      (button == "b" and joystick:isGamepadDown("back")) then
     toggleVSync()
   end
+  -- Toggle size preset with Select + Y/Triangle
+  if (button == "back" and joystick:isGamepadDown("y")) or
+     (button == "y" and joystick:isGamepadDown("back")) then
+    toggleSizePreset()
+  end
 end
 
 --- Handle keyboard input for profiler control
@@ -467,6 +558,12 @@ function shoveProfiler.keypressed(key)
      key == "v" then
     toggleVSync()
   end
+  -- Toggle size preset with Ctrl+S or Cmd+S
+  if (love.keyboard.isDown("lctrl") or love.keyboard.isDown("rctrl") or
+      love.keyboard.isDown("lgui") or love.keyboard.isDown("rgui")) and
+     key == "s" then
+    toggleSizePreset()
+  end
 end
 
 --- Handles touch input for toggling profiler overlay and VSync
@@ -480,6 +577,25 @@ function shoveProfiler.touchpressed(id, x, y)
   end
 
   local currentTime = love.timer.getTime()
+
+  -- Check for panel border taps to toggle size
+  if isTouchOnPanelBorder(x, y) then
+    local lastTapTime = shoveProfiler.input.touch.lastBorderTapTime
+    local lastPos = shoveProfiler.input.touch.lastBorderTapPosition
+    local distance = math.sqrt((x - lastPos.x)^2 + (y - lastPos.y)^2)
+
+    -- Check if this is a double tap in roughly the same position
+    if currentTime - lastTapTime <= shoveProfiler.input.touch.doubleTapThreshold and distance < 30 then
+      toggleSizePreset()
+      shoveProfiler.input.touch.lastBorderTapTime = 0
+    else
+      shoveProfiler.input.touch.lastBorderTapTime = currentTime
+      shoveProfiler.input.touch.lastBorderTapPosition = {x = x, y = y}
+    end
+    return
+  end
+
+  -- Handle other touch interactions
   local timeSinceLastTap = currentTime - shoveProfiler.input.touch.lastTapTime
 
   if shoveProfiler.state.isOverlayVisible and isTouchInsideOverlay(x, y) then
