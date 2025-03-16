@@ -78,7 +78,7 @@ local function updatePanelDimensions()
 
   -- Add layer info height if using layer rendering
   if shoveProfiler.metrics.state and shoveProfiler.metrics.state.renderMode == "layer" then
-    local layerCount = shoveProfiler.metrics.state.layers.count or 0
+    local layerCount = shoveProfiler.metrics.state.layers and shoveProfiler.metrics.state.layers.count or 0
     contentHeight = contentHeight + (#cachedLayerInfo + layerCount) * shoveProfiler.config.lineHeight
     contentHeight = contentHeight + shoveProfiler.config.panel.padding * 2
   end
@@ -98,17 +98,17 @@ local function updatePanelDimensions()
   }
 end
 
---- Initialize the profiler with a reference to the Shöve instance
----@param shoveRef table Reference to the main Shöve instance
+--- Sets up LÖVE event handlers for the profiler
+---@param originalHandlers table Table to store original handlers
 ---@return nil
-function shoveProfiler.init(shoveRef)
-  shoveProfiler.shove = shoveRef
+local function setupEventHandlers()
   local originalHandlers = {}
   local eventsToHook = {
     "keypressed",
     "touchpressed",
     "gamepadpressed",
   }
+
   -- Hook profiler into events
   for _, event in ipairs(eventsToHook) do
     -- Store original handler
@@ -124,8 +124,11 @@ function shoveProfiler.init(shoveRef)
       end
     end
   end
+end
 
-  -- Collect static metrics
+--- Collects static system metrics that don't change during runtime
+---@return nil
+local function collectStaticMetrics()
   shoveProfiler.metrics.arch = love.system.getOS() ~= "Web" and require("ffi").arch or "Web"
   shoveProfiler.metrics.os = love.system.getOS()
   shoveProfiler.metrics.cpuCount = love.system.getProcessorCount()
@@ -136,6 +139,8 @@ function shoveProfiler.init(shoveRef)
   local graphicsSupported = love.graphics.getSupported()
   shoveProfiler.metrics.glsl3 = graphicsSupported.glsl3
   shoveProfiler.metrics.pixelShaderHighp = graphicsSupported.pixelshaderhighp
+
+  -- Cache hardware information
   cachedHardwareInfo = {
     string.format("%s (%s): %s x CPU", shoveProfiler.metrics.os, shoveProfiler.metrics.arch, shoveProfiler.metrics.cpuCount),
     string.format("%s (%s)", shoveProfiler.metrics.rendererName, shoveProfiler.metrics.rendererVendor),
@@ -145,9 +150,11 @@ function shoveProfiler.init(shoveRef)
     string.format("Highp Pixel Shader: %s", shoveProfiler.metrics.pixelShaderHighp and "Yes" or "No"),
     ""
   }
-  updatePanelDimensions()
+end
 
-  -- Set up the metrics collection event handler
+--- Sets up the metrics collection event handler
+---@return nil
+local function setupMetricsCollector()
   love.handlers["shove_collect_metrics"] = function()
     -- Check if enough time has passed since last collection
     local currentTime = love.timer.getTime()
@@ -160,52 +167,85 @@ function shoveProfiler.init(shoveRef)
     shoveProfiler.metrics.fps = love.timer.getFPS()
     shoveProfiler.metrics.memory = collectgarbage("count")
     shoveProfiler.metrics.stats = love.graphics.getStats()
-    shoveProfiler.metrics.state = shoveProfiler.shove.getState()
 
-    local textureMemoryMB = shoveProfiler.metrics.stats.texturememory / (1024 * 1024)
+    -- Safely get Shöve state
+    if shoveProfiler.shove and type(shoveProfiler.shove.getState) == "function" then
+      shoveProfiler.metrics.state = shoveProfiler.shove.getState()
+    else
+      shoveProfiler.metrics.state = {}
+    end
+
+    -- Safely access stats properties
+    local stats = shoveProfiler.metrics.stats or {}
+    local textureMemoryMB = (stats.texturememory or 0) / (1024 * 1024)
     local memoryMB = shoveProfiler.metrics.memory / 1024
     local frameTime = love.timer.getDelta() * 1000
 
     -- Calculate total particle count
     local totalParticles = 0
     for ps, _ in pairs(shoveProfiler.particles.systems) do
-      if ps:isActive() then
+      if ps and ps.isActive and ps:isActive() then
         totalParticles = totalParticles + ps:getCount()
       end
     end
     shoveProfiler.particles.count = totalParticles
 
+    -- Build cached performance info
     cachedPerformanceInfo = {
-      string.format("FPS: %.0f (%.1f ms)", shoveProfiler.metrics.fps, frameTime),
+      string.format("FPS: %.0f (%.1f ms)", shoveProfiler.metrics.fps or 0, frameTime),
       string.format("VSync: %s", shoveProfiler.state.isVsyncEnabled and "On" or "Off"),
-      string.format("Draw Calls: %d (%d batched)", shoveProfiler.metrics.stats.drawcalls, shoveProfiler.metrics.stats.drawcallsbatched),
-      string.format("Canvases: %d (%d switches)", shoveProfiler.metrics.stats.canvases, shoveProfiler.metrics.stats.canvasswitches),
-      string.format("Shader Switches: %d", shoveProfiler.metrics.stats.shaderswitches),
+      string.format("Draw Calls: %d (%d batched)", stats.drawcalls or 0, stats.drawcallsbatched or 0),
+      string.format("Canvases: %d (%d switches)", stats.canvases or 0, stats.canvasswitches or 0),
+      string.format("Shader Switches: %d", stats.shaderswitches or 0),
       string.format("Particles: %d", totalParticles),
-      string.format("Images: %d", shoveProfiler.metrics.stats.images),
-      string.format("Fonts: %d", shoveProfiler.metrics.stats.fonts),
+      string.format("Images: %d", stats.images or 0),
+      string.format("Fonts: %d", stats.fonts or 0),
       string.format("VRAM: %.1f MB", textureMemoryMB),
       string.format("RAM: %.1f MB", memoryMB),
       ""
     }
+
+    -- Safely build Shöve info
+    local state = shoveProfiler.metrics.state or {}
     cachedShoveInfo = {
-      string.format("Shöve %s", shove._VERSION.string),
-      string.format("Mode: %s  /  %s  /  %s", shoveProfiler.metrics.state.renderMode, shoveProfiler.metrics.state.fitMethod, shoveProfiler.metrics.state.scalingFilter),
-      string.format("Window: %d x %d", shoveProfiler.metrics.state.screen_width, shoveProfiler.metrics.state.screen_height),
-      string.format("Viewport: %d x %d", shoveProfiler.metrics.state.viewport_width, shoveProfiler.metrics.state.viewport_height),
-      string.format("Rendered: %d x %d", shoveProfiler.metrics.state.rendered_width, shoveProfiler.metrics.state.rendered_height),
-      string.format("Scale: %.1f x %.1f", shoveProfiler.metrics.state.scale_x, shoveProfiler.metrics.state.scale_y),
-      string.format("Offset: %d x %d", shoveProfiler.metrics.state.offset_x, shoveProfiler.metrics.state.offset_y),
+      string.format("Shöve %s", (shove and shove._VERSION and shove._VERSION.string) or "Unknown"),
+      string.format("Mode: %s  /  %s  /  %s", state.renderMode or "?", state.fitMethod or "?", state.scalingFilter or "?"),
+      string.format("Window: %d x %d", state.screen_width or 0, state.screen_height or 0),
+      string.format("Viewport: %d x %d", state.viewport_width or 0, state.viewport_height or 0),
+      string.format("Rendered: %d x %d", state.rendered_width or 0, state.rendered_height or 0),
+      string.format("Scale: %.1f x %.1f", state.scale_x or 0, state.scale_y or 0),
+      string.format("Offset: %d x %d", state.offset_x or 0, state.offset_y or 0),
       ""
     }
+
+    -- Safely build layer info
     cachedLayerInfo = {}
-    if shoveProfiler.metrics.state.renderMode == "layer" then
+    if state.renderMode == "layer" and state.layers then
       cachedLayerInfo = {
-        string.format("Layers: (%d / %s)", shoveProfiler.metrics.state.layers.count, shoveProfiler.metrics.state.layers.active),
+        string.format("Layers: (%d / %s)", state.layers.count or 0, state.layers.active or "none"),
       }
     end
     updatePanelDimensions()
   end
+end
+
+--- Initialize the profiler with a reference to the Shöve instance
+---@param shoveRef table Reference to the main Shöve instance
+---@return boolean success Whether initialization was successful
+function shoveProfiler.init(shoveRef)
+  -- Validate input
+  if not shoveRef then
+    print("Error: Shöve reference is required to initialize the profiler")
+    return false
+  end
+  -- Store Shöve reference
+  shoveProfiler.shove = shoveRef
+
+  setupEventHandlers()
+  collectStaticMetrics()
+  updatePanelDimensions()
+  setupMetricsCollector()
+  return true
 end
 
 --- Render a section of information with proper coloring
@@ -215,6 +255,16 @@ end
 ---@param colorHeader table Color for the section header
 ---@return number newY The new Y position after rendering
 local function renderInfoSection(info, x, y, colorHeader)
+  if type(info) ~= "table" then
+    return y
+  end
+  if type(x) ~= "number" or type(y) ~= "number" then
+    return y
+  end
+  if type(colorHeader) ~= "table" then
+    colorHeader = shoveProfiler.config.colors.white
+  end
+
   if #info == 0 then return y end
 
   for i=1, #info do
@@ -227,6 +277,55 @@ local function renderInfoSection(info, x, y, colorHeader)
     y = y + shoveProfiler.config.lineHeight
   end
   return y
+end
+
+--- Renders layer information in the profiler overlay
+---@param renderX number X position to render at
+---@param renderY number Y position to render at
+---@return number newY The new Y position after rendering
+local function renderLayerInfo(renderX, renderY)
+  if not shoveProfiler.metrics.state or shoveProfiler.metrics.state.renderMode ~= "layer" then
+    return renderY
+  end
+
+  renderY = renderInfoSection(cachedLayerInfo, renderX, renderY, shoveProfiler.config.colors.purple)
+
+  -- Safely access layer information
+  local state = shoveProfiler.metrics.state
+  if not state.layers or not state.layers.ordered then
+    return renderY
+  end
+
+  local color = shoveProfiler.config.colors.white
+  local old_color = nil
+  local layer = state.layers.ordered
+  local layerText = ""
+
+  for i=1, #layer do
+    if layer[i] and layer[i].name and layer[i].name ~= "_composite" and layer[i].name ~= "_tmp" then
+      layerText = string.format(
+        "%d: %s (%s / %s)",
+        layer[i].zIndex or 0,
+        layer[i].name,
+        layer[i].blendMode or "alpha",
+        (layer[i].blendAlphaMode and layer[i].blendAlphaMode:sub(1,4)) or "alph"
+      )
+      if layer[i].name == state.layers.active then
+        color = shoveProfiler.config.colors.green
+      end
+      if layer[i].visible == false then
+        color = shoveProfiler.config.colors.red
+      end
+      if color ~= old_color then
+        love.graphics.setColor(color)
+      end
+      love.graphics.print(layerText, renderX, renderY)
+      old_color = color
+      renderY = renderY + shoveProfiler.config.lineHeight
+    end
+  end
+
+  return renderY
 end
 
 --- Display performance metrics and profiling information
@@ -258,38 +357,7 @@ function shoveProfiler.renderOverlay()
   renderY = renderInfoSection(cachedHardwareInfo, renderX, renderY, shoveProfiler.config.colors.blue)
   renderY = renderInfoSection(cachedPerformanceInfo, renderX, renderY, shoveProfiler.config.colors.blue)
   renderY = renderInfoSection(cachedShoveInfo, renderX, renderY, shoveProfiler.config.colors.purple)
-
-  -- Draw layer info
-  if shoveProfiler.metrics.state.renderMode == "layer" then
-    renderY = renderInfoSection(cachedLayerInfo, renderX, renderY, shoveProfiler.config.colors.purple)
-    local color = shoveProfiler.config.colors.white
-    local old_color = nil
-    local layer = shoveProfiler.metrics.state.layers.ordered
-    local layerText = ""
-    for i=1, #layer do
-      if layer[i].name ~= "_composite" and layer[i].name ~= "_tmp" then
-        layerText = string.format(
-          "%d: %s (%s / %s)",
-          layer[i].zIndex,
-          layer[i].name,
-          layer[i].blendMode,
-          layer[i].blendAlphaMode:sub(1,4)
-        )
-        if layer[i].name == shoveProfiler.metrics.state.layers.active then
-          color = shoveProfiler.config.colors.green
-        end
-        if not layer[i].visible then
-          color = shoveProfiler.config.colors.red
-        end
-        if color ~= old_color then
-          love.graphics.setColor(color)
-        end
-        love.graphics.print(layerText, renderX, renderY)
-        old_color = color
-        renderY = renderY + shoveProfiler.config.lineHeight
-      end
-    end
-  end
+  renderY = renderLayerInfo(renderX, renderY)
 
   -- Restore graphics state
   love.graphics.setColor(r, g, b, a)
@@ -330,6 +398,10 @@ end
 ---@param y number Touch/click y-coordinate
 ---@return boolean isInCorner True if touch is in the corner activation area
 local function isTouchInCorner(x, y)
+  if type(x) ~= "number" or type(y) ~= "number" then
+    return false
+  end
+
   local w, h = love.graphics.getDimensions()
   return x >= w - shoveProfiler.input.touch.cornerSize and y <= shoveProfiler.input.touch.cornerSize
 end
@@ -339,6 +411,10 @@ end
 ---@param y number Touch/click y-coordinate
 ---@return boolean isInOverlay True if touch is inside the overlay area
 local function isTouchInsideOverlay(x, y)
+  if type(x) ~= "number" or type(y) ~= "number" then
+    return false
+  end
+
   local area = shoveProfiler.input.touch.overlayArea
   return x >= area.x and x <= area.x + area.width and
          y >= area.y and y <= area.y + area.height
@@ -349,6 +425,10 @@ end
 ---@param button string The button that was pressed
 ---@return nil
 function shoveProfiler.gamepadpressed(joystick, button)
+  if not joystick or type(button) ~= "string" then
+    return
+  end
+
   local currentTime = love.timer.getTime()
   if currentTime - shoveProfiler.input.controller.lastCheckTime < shoveProfiler.input.controller.cooldown then
     return
@@ -371,6 +451,10 @@ end
 ---@param key string The key that was pressed
 ---@return nil
 function shoveProfiler.keypressed(key)
+  if type(key) ~= "string" then
+    return
+  end
+
   -- Toggle overlay with Ctrl+P or Cmd+P
   if (love.keyboard.isDown("lctrl") or love.keyboard.isDown("rctrl") or
       love.keyboard.isDown("lgui") or love.keyboard.isDown("rgui")) and
@@ -391,6 +475,10 @@ end
 ---@param y number The y-coordinate of the touch
 ---@return nil
 function shoveProfiler.touchpressed(id, x, y)
+  if type(x) ~= "number" or type(y) ~= "number" then
+    return
+  end
+
   local currentTime = love.timer.getTime()
   local timeSinceLastTap = currentTime - shoveProfiler.input.touch.lastTapTime
 
@@ -415,16 +503,31 @@ end
 
 --- Register a particle system to be tracked in metrics
 ---@param particleSystem love.ParticleSystem The particle system to track
----@return nil
+---@return boolean success Whether registration was successful
 function shoveProfiler.registerParticleSystem(particleSystem)
+  if not particleSystem or type(particleSystem) ~= "userdata" or not particleSystem.isActive then
+    print("Error: Invalid particle system provided to registerParticleSystem")
+    return false
+  end
+
   shoveProfiler.particles.systems[particleSystem] = true
+  return true
 end
 
 --- Unregister a particle system from tracking
 ---@param particleSystem love.ParticleSystem The particle system to unregister
----@return nil
+---@return boolean success Whether unregistration was successful
 function shoveProfiler.unregisterParticleSystem(particleSystem)
-  shoveProfiler.particles.systems[particleSystem] = nil
+  if not particleSystem then
+    print("Error: Invalid particle system provided to unregisterParticleSystem")
+    return false
+  end
+
+  if shoveProfiler.particles.systems[particleSystem] then
+    shoveProfiler.particles.systems[particleSystem] = nil
+    return true
+  end
+  return false
 end
 
 return shoveProfiler
