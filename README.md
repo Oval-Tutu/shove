@@ -888,29 +888,32 @@ function addResizeHandler(handler)
 end
 ```
 
-### Debug Metrics
+### Performance Profiler
 
-Shöve includes a built-in debug metrics that provides real-time information about resolution management, layer status, and rendering performance.
-This can help diagnose scaling issues and optimize your game.
+Shöve includes a built-in performance profiler that provides real-time information about resolution management, layer status, and rendering performance. This can help diagnose scaling issues and optimize your game during development.
 
-**💡 NOTE!** You can only toggle VSync while the overlay is enabled.
+The profiler overlay displays:
+- Hardware information (OS, CPU, GPU)
+- Performance metrics (FPS, draw calls, memory usage)
+- Resolution and scaling information
+- Detailed layer information (when using layer rendering)
 
-```lua
+#### Profiler Controls
 
-#### Keyboard Controls
+- **Keyboard:** <kbd>Ctrl</kbd> + <kbd>P</kbd> to toggle overlay
+- **Keyboard:** <kbd>Ctrl</kbd> + <kbd>V</kbd> to toggle VSync (when overlay is visible)
+- **Controller:** Select + A/Cross to toggle overlay
+- **Controller:** Select + B/Circle to toggle VSync (when overlay is visible)
+- **Touch:** Double-tap top right corner to toggle overlay
+- **Touch:** Double-tap the overlay to toggle VSync (when overlay is visible)
 
-- <kbd>Ctrl</kbd> + <kbd>d</kbd>: Toggle Overlay
-- <kbd>Ctrl</kbd> + <kbd>v</kbd>: Toggle VSync (only when overlay is enabled)
+#### Disabling the Profiler for Production
 
-#### Controller Controls
+The profiler is implemented in a separate file (`shove-profiler.lua`) so you can easily disable it in production builds.
 
-- Select + A: Toggle Overlay
-- Select + B: Toggle VSync
+Don't include the profiler file in your production builds. Shöve will automatically detect its absence and use a no-op stub implementation:
 
-#### Touch Controls
-
-- Double Tap top right corner: Toggle Overlay
-- Double Tap the overlay itself: Toggle VSync
+This approach ensures that the profiler adds zero overhead to your game in production releases while exposing useful tooling during development.
 
 ## API Reference
 
