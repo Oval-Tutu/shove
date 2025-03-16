@@ -902,10 +902,13 @@ The profiler overlay displays:
 
 - **Keyboard:** <kbd>Ctrl</kbd> + <kbd>P</kbd> to toggle overlay
 - **Keyboard:** <kbd>Ctrl</kbd> + <kbd>V</kbd> to toggle VSync (when overlay is visible)
+- **Keyboard:** <kbd>Ctrl</kbd> + <kbd>S</kbd> to toggle overlay size
 - **Controller:** Select + A/Cross to toggle overlay
 - **Controller:** Select + B/Circle to toggle VSync (when overlay is visible)
+- **Controller:** Select + Y/Triangle to toggle overlay size
 - **Touch:** Double-tap top right corner to toggle overlay
 - **Touch:** Double-tap the overlay to toggle VSync (when overlay is visible)
+- **Touch:** Double-tap overlay panel border/edge to toggle overlay size
 
 #### Disabling the Profiler for Production
 
