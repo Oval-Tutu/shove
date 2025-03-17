@@ -30,6 +30,8 @@ local shoveProfiler = {
       green = { 0.5, 1, 0.5, 1 },
       blue = { 0.5, 0.5, 1, 1 },
       purple = { 0.75, 0.5, 1, 1 },
+      yellow = { 1, 1, 0.5, 1 },
+      orange = { 1, 0.7, 0.3, 1 },  -- Add an orange color for layers without canvases
       white = { 1, 1, 1, 1 },
     },
     -- Panel settings
@@ -277,8 +279,20 @@ local function setupMetricsCollector()
     -- Safely build layer info
     cachedLayerInfo = {}
     if state.renderMode == "layer" and state.layers then
+      -- Count how many layers have canvases
+      local canvasCount = 0
+      if state.layers.ordered then
+        for _, layer in ipairs(state.layers.ordered) do
+          if layer.hasCanvas then
+            canvasCount = canvasCount + 1
+          end
+        end
+      end
+
       cachedLayerInfo = {
-        string.format("Layers: (%d / %s)", state.layers.count or 0, state.layers.active or "none"),
+        string.format("Layers: %d (%d with canvas)",
+          state.layers.count or 0,
+          canvasCount),
       }
     end
     updatePanelDimensions()
@@ -364,24 +378,39 @@ local function renderLayerInfo(renderX, renderY)
 
   for i=1, #layer do
     if layer[i] and layer[i].name and layer[i].name ~= "_composite" and layer[i].name ~= "_tmp" then
+      -- Include effects count in display if there are any
+      local effectsInfo = layer[i].effects > 0 and " [E:" .. layer[i].effects .. "]" or ""
+
       layerText = string.format(
-        "%d: %s (%s / %s)",
+        "%d: %s (%s/%s)%s",
         layer[i].zIndex or 0,
         layer[i].name,
         layer[i].blendMode or "alpha",
-        (layer[i].blendAlphaMode and layer[i].blendAlphaMode:sub(1,4)) or "alph"
+        (layer[i].blendAlphaMode and layer[i].blendAlphaMode:sub(1,4)) or "alph",
+        effectsInfo
       )
+
+      -- Set color based on layer status
+      color = shoveProfiler.config.colors.white -- Default color
+
       if layer[i].name == state.layers.active then
-        color = shoveProfiler.config.colors.green
+        color = shoveProfiler.config.colors.green -- Active layer
       end
-      if layer[i].visible == false then
-        color = shoveProfiler.config.colors.red
+
+      if not layer[i].visible then
+        color = shoveProfiler.config.colors.red -- Hidden layer
       end
+
+      if not layer[i].hasCanvas then
+        color = shoveProfiler.config.colors.orange -- No canvas allocated
+      end
+
       if color ~= old_color then
         love.graphics.setColor(color)
+        old_color = color
       end
+
       love.graphics.print(layerText, renderX, renderY)
-      old_color = color
       renderY = renderY + shoveProfiler.config.lineHeight
     end
   end

@@ -76,6 +76,16 @@ local function createMaskShader()
   ]]
 end
 
+--- Ensures a layer has a valid canvas
+---@param layer ShoveLayer Layer to check
+---@return love.Canvas canvas The layer's canvas
+local function ensureLayerCanvas(layer)
+  if not layer.canvas then
+    layer.canvas = love.graphics.newCanvas(state.viewport_width, state.viewport_height)
+  end
+  return layer.canvas
+end
+
 --- Calculate transformation values based on current settings
 local function calculateTransforms()
   -- Calculate initial scale factors (used by most modes)
@@ -110,13 +120,15 @@ local function calculateTransforms()
   -- Set appropriate filter based on scaling configuration
   love.graphics.setDefaultFilter(state.scalingFilter)
 
-  -- Recreate canvases for all layers when dimensions change
+  -- Recreate canvases only for layers that already have one when dimensions change
   if state.renderMode == "layer" then
     for _, layer in pairs(state.layers.byName) do
-      layer.canvas = love.graphics.newCanvas(state.viewport_width, state.viewport_height)
+      if layer.canvas then
+        layer.canvas = love.graphics.newCanvas(state.viewport_width, state.viewport_height)
+      end
     end
 
-    if state.layers.composite then
+    if state.layers.composite and state.layers.composite.canvas then
       state.layers.composite.canvas = love.graphics.newCanvas(state.viewport_width, state.viewport_height)
     end
   end
@@ -145,6 +157,7 @@ local function createLayer(layerName, options)
   local layer = {
     name = layerName,
     zIndex = options.zIndex or (#state.layers.ordered + 1),
+    -- Create canvas immediately for explicitly created layers
     canvas = love.graphics.newCanvas(state.viewport_width, state.viewport_height),
     visible = options.visible ~= false, -- Default to visible
     stencil = options.stencil or false,
@@ -192,7 +205,7 @@ local function createCompositeLayer()
   local composite = {
     name = "_composite",
     zIndex = 9999, -- Always rendered last
-    canvas = love.graphics.newCanvas(state.viewport_width, state.viewport_height),
+    canvas = nil,  -- Deferred canvas creation
     visible = true,
     effects = {}
   }
@@ -228,6 +241,8 @@ local function applyEffects(canvas, effects)
     if not tmpLayer then
       tmpLayer = createLayer("_tmp", { visible = false })
     end
+    -- Ensure the temporary canvas exists
+    ensureLayerCanvas(tmpLayer)
     local tmpCanvas = tmpLayer.canvas
 
     local outputCanvas
@@ -263,13 +278,35 @@ local function beginLayerDraw(layerName)
 
   local layer = getLayer(layerName)
   if not layer then
-    -- Create layer if it doesn't exist
-    layer = createLayer(layerName)
+    -- Deferred canvas creation for implicitly created layers
+    layer = {
+      name = layerName,
+      zIndex = #state.layers.ordered + 1,
+      canvas = nil,
+      visible = true,
+      stencil = false,
+      effects = {},
+      blendMode = "alpha",
+      blendAlphaMode = "alphamultiply",
+      maskLayer = nil
+    }
+
+    state.layers.byName[layerName] = layer
+    table.insert(state.layers.ordered, layer)
+
+    -- Sort by zIndex
+    table.sort(state.layers.ordered, function(a, b)
+      return a.zIndex < b.zIndex
+    end)
   end
+
+  -- Ensure layer has a canvas before drawing
+  ensureLayerCanvas(layer)
 
   -- Set as current layer and activate canvas
   state.layers.active = layer
   love.graphics.setCanvas({ layer.canvas, stencil = layer.stencil })
+  love.graphics.clear() -- Clear the canvas when beginning to draw
 
   return true
 end
@@ -308,6 +345,9 @@ local function compositeLayersOnScreen(globalEffects, applyPersistentEffects)
     createCompositeLayer()
   end
 
+  -- Ensure composite layer has a canvas
+  ensureLayerCanvas(state.layers.composite)
+
   -- Create mask shader if it doesn't exist
   if not state.maskShader then
     createMaskShader()
@@ -323,37 +363,40 @@ local function compositeLayersOnScreen(globalEffects, applyPersistentEffects)
   -- Draw all visible layers in order
   for _, layer in ipairs(state.layers.ordered) do
     if layer.visible and layer.name ~= "_composite" and layer.name ~= "_tmp" then
-      -- Apply mask if needed
-      if layer.maskLayer then
-        local maskLayer = getLayer(layer.maskLayer)
-        if maskLayer then
-          -- Clear stencil buffer first
-          love.graphics.clear(false, false, true)
-          love.graphics.stencil(function()
-            -- Use mask shader to properly handle transparent pixels
-            love.graphics.setShader(state.maskShader)
-            love.graphics.draw(maskLayer.canvas)
-            love.graphics.setShader()
-          end, "replace", 1)
-          -- Only draw where stencil value equals 1
-          love.graphics.setStencilTest("equal", 1)
+      -- Skip layers without canvas (never drawn to)
+      if layer.canvas then  -- Only process layers that have a canvas
+        -- Apply mask if needed
+        if layer.maskLayer then
+          local maskLayer = getLayer(layer.maskLayer)
+          if maskLayer and maskLayer.canvas then
+            -- Clear stencil buffer first
+            love.graphics.clear(false, false, true)
+            love.graphics.stencil(function()
+              -- Use mask shader to properly handle transparent pixels
+              love.graphics.setShader(state.maskShader)
+              love.graphics.draw(maskLayer.canvas)
+              love.graphics.setShader()
+            end, "replace", 1)
+            -- Only draw where stencil value equals 1
+            love.graphics.setStencilTest("equal", 1)
+          end
         end
-      end
 
-      -- Use premultiplied alpha when drawing canvases
-      -- But respect the layer's blend mode
-      love.graphics.setBlendMode(layer.blendMode, "premultiplied")
+        -- Use premultiplied alpha when drawing canvases
+        -- But respect the layer's blend mode
+        love.graphics.setBlendMode(layer.blendMode, "premultiplied")
 
-      -- Apply layer effects or draw directly
-      if #layer.effects > 0 then
-        applyEffects(layer.canvas, layer.effects)
-      else
-        love.graphics.draw(layer.canvas)
-      end
+        -- Apply layer effects or draw directly
+        if #layer.effects > 0 then
+          applyEffects(layer.canvas, layer.effects)
+        else
+          love.graphics.draw(layer.canvas)
+        end
 
-      -- Reset stencil if used
-      if layer.maskLayer then
-        love.graphics.setStencilTest()
+        -- Reset stencil if used
+        if layer.maskLayer then
+          love.graphics.setStencilTest()
+        end
       end
     end
   end
@@ -545,10 +588,24 @@ local shove = {
 
     -- Initialize layer system for buffer mode
     if state.renderMode == "layer" then
-      createLayer("default")
+      -- Create default layer manually without canvas (deferred creation)
+      -- This ensures no canvas is allocated unless actually drawn to
+      state.layers.byName["default"] = {
+        name = "default",
+        zIndex = 1,
+        canvas = nil, -- Deferred canvas creation
+        visible = true,
+        stencil = false,
+        effects = {},
+        blendMode = "alpha",
+        blendAlphaMode = "alphamultiply",
+        maskLayer = nil
+      }
+      table.insert(state.layers.ordered, state.layers.byName["default"])
+
       createCompositeLayer()
 
-      -- Don't activate layer right away, just mark it as active
+      -- Mark default as active (but don't create a canvas yet)
       state.layers.active = state.layers.byName["default"]
     end
   end,
@@ -634,12 +691,10 @@ local shove = {
         state.layers.active = state.layers.byName["default"]
       end
 
-      -- Set canvas of the active layer now that we're drawing
-      if state.layers.active then
-        love.graphics.setCanvas({ state.layers.active.canvas, stencil = state.layers.active.stencil })
-      end
+      -- DON'T activate any canvas yet - wait until an actual layer is used
+      -- This prevents automatic canvas creation for the default layer
+      -- We'll set the appropriate canvas when beginLayer is called
 
-      love.graphics.clear()
     else
       love.graphics.translate(state.offset_x, state.offset_y)
       love.graphics.setScissor(state.offset_x, state.offset_y,
@@ -678,9 +733,10 @@ local shove = {
       compositeLayersOnScreen(globalEffects, true)
       love.graphics.pop()
 
-      -- Clear all layer canvases
+      -- Clear all layer canvases that exist
       for name, layer in pairs(state.layers.byName) do
-        if name ~= "_composite" and name ~= "_tmp" then
+        if name ~= "_composite" and name ~= "_tmp" and layer.canvas then
+          -- Only try to clear canvases that actually exist
           love.graphics.setCanvas(layer.canvas)
           love.graphics.clear()
         end
@@ -1037,6 +1093,44 @@ local shove = {
     end
 
     return true
+  end,
+
+  --- Add a function to release canvas memory for unused layers
+  ---@param layerName string Layer name
+  ---@return boolean success Whether the canvas was released
+  releaseLayerCanvas = function(layerName)
+    if type(layerName) ~= "string" then
+      error("shove.releaseLayerCanvas: layerName must be a string", 2)
+    end
+
+    if layerName == "" then
+      error("shove.releaseLayerCanvas: layerName cannot be empty", 2)
+    end
+
+    local layer = getLayer(layerName)
+    if not layer or not layer.canvas then
+      return false
+    end
+
+    layer.canvas:release()
+    layer.canvas = nil
+    return true
+  end,
+
+  --- Check if a layer has a canvas allocated
+  ---@param layerName string Layer name
+  ---@return boolean hasCanvas Whether the layer has a canvas allocated
+  hasLayerCanvas = function(layerName)
+    if type(layerName) ~= "string" then
+      error("shove.hasLayerCanvas: layerName must be a string", 2)
+    end
+
+    if layerName == "" then
+      error("shove.hasLayerCanvas: layerName cannot be empty", 2)
+    end
+
+    local layer = getLayer(layerName)
+    return layer ~= nil and layer.canvas ~= nil
   end,
 
   --- Begin drawing to a layer
@@ -1435,6 +1529,22 @@ local shove = {
 
   --- Return a copy of relevant state data for debug metrics
   getState = function()
+    -- Create an ordered array of layers with basic info for profiler
+    local orderedLayerInfo = {}
+    if state.renderMode == "layer" and #state.layers.ordered > 0 then
+      for _, layer in ipairs(state.layers.ordered) do
+        table.insert(orderedLayerInfo, {
+          name = layer.name,
+          zIndex = layer.zIndex,
+          visible = layer.visible,
+          blendMode = layer.blendMode,
+          blendAlphaMode = layer.blendAlphaMode,
+          hasCanvas = layer.canvas ~= nil, -- Add canvas existence info
+          effects = #layer.effects
+        })
+      end
+    end
+
     return {
       fitMethod = state.fitMethod,
       renderMode = state.renderMode,
@@ -1452,10 +1562,10 @@ local shove = {
       layers = state.renderMode == "layer" and {
         count = #state.layers.ordered,
         active = state.layers.active and state.layers.active.name or nil,
-        ordered = state.layers.ordered -- Reference, not a deep copy
+        ordered = orderedLayerInfo -- Now contains canvas info for each layer
       } or nil
     }
-  end
+  end,
 }
 
 do
