@@ -283,15 +283,7 @@ local function setupMetricsCollector()
     -- Safely build layer info
     cachedLayerInfo = {}
     if state.renderMode == "layer" and state.layers then
-      -- Count how many layers have canvases
-      local canvasCount = 0
-      if state.layers.ordered then
-        for _, layer in ipairs(state.layers.ordered) do
-          if layer.hasCanvas then
-            canvasCount = canvasCount + 1
-          end
-        end
-      end
+      local canvasCount = state.layers.canvas_count or 0
 
       -- Add special layer usage information
       local specialUsage = state.specialLayerUsage or {}

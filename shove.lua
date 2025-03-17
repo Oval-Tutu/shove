@@ -1612,9 +1612,14 @@ local shove = {
   getState = function()
     -- Create an ordered array of layers with basic info for profiler
     local orderedLayerInfo = {}
+    local canvasCount = 0
     local specialLayerCount = 0
     if state.renderMode == "layer" and #state.layers.ordered > 0 then
       for _, layer in ipairs(state.layers.ordered) do
+        -- Count layers with canvas
+        if layer.canvas ~= nil then
+          canvasCount = canvasCount + 1
+        end
         -- Count special layers
         if layer.isSpecial then
           specialLayerCount = specialLayerCount + 1
@@ -1648,6 +1653,7 @@ local shove = {
       offset_y = state.offset_y,
       layers = state.renderMode == "layer" and {
         count = #state.layers.ordered,
+        canvas_count = canvasCount,
         special_layer_count = specialLayerCount,
         active = state.layers.active and state.layers.active.name or nil,
         ordered = orderedLayerInfo -- Now contains canvas info for each layer
