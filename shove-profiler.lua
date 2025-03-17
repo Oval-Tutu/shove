@@ -283,16 +283,22 @@ local function setupMetricsCollector()
     }
 
     -- Safely build layer info
-    cachedLayerInfo = {}
+    for k in pairs(cachedLayerInfo) do cachedLayerInfo[k] = nil end
+    local layerCount = 0
+    local canvasCount = 0
     if state.renderMode == "layer" and state.layers then
-      local canvasCount = state.layers.canvas_count or 0
+      local layer_count = state.layers.count or 0
+      local canvas_count = state.layers.canvas_count or 0
+      local special_layer_count = state.layers.special_layer_count or 0
+      layerCount = layer_count - special_layer_count
+      canvasCount = canvas_count - special_layer_count
 
       -- Add special layer usage information
       local specialUsage = state.specialLayerUsage or {}
 
       cachedLayerInfo = {
-        string.format("Layers: %d (%d canvases)",
-          state.layers.count or 0,
+        string.format("Layers: %d (%d active)",
+          layerCount,
           canvasCount),
         string.format("Composites: %d", specialUsage.compositeSwitches or 0),
       }
@@ -383,15 +389,24 @@ local function renderLayerInfo(renderX, renderY)
     return renderY
   end
 
+  local lastLayerIndex = state.layers.count - state.layers.special_layer_count
   local color = shoveProfiler.config.colors.white
   local old_color = nil
-  local layers = state.layers.ordered
   local layerText = ""
-
+  local effectsCount = 0
+  local effectsInfo = ""
+  local layers = state.layers.ordered
   for i=1, #layers do
     local layer = layers[i]
     if layer and layer.name and not layer.isSpecial then
-      local effectsInfo = layer.effects > 0 and " [" .. layer.effects .. " fx]" or ""
+      -- Calculate effects count for the layer
+      effectsCount = layer.effects or 0
+      -- Add global effects count to the last layer
+      if i == lastLayerIndex then
+        effectsCount = effectsCount + state.global_effects_count
+      end
+      effectsInfo = effectsCount > 0 and " [" .. effectsCount .. " fx]" or ""
+
       layerText = string.format(
         "%d: %s %s",
         layer.zIndex or 0,
@@ -400,22 +415,18 @@ local function renderLayerInfo(renderX, renderY)
       )
       color = shoveProfiler.config.colors.white
 
-      if layer.name == state.layers.active then
-        color = shoveProfiler.config.colors.green
-      end
-
       if not layer.visible then
         color = shoveProfiler.config.colors.red
-      end
-
-      if not layer.hasCanvas then
+      elseif layer.name == state.layers.active then
+        color = shoveProfiler.config.colors.green
+      elseif not layer.hasCanvas then
         color = shoveProfiler.config.colors.midGray
       end
 
       if color ~= old_color then
         love.graphics.setColor(color)
-        old_color = color
       end
+      old_color = color
 
       love.graphics.print(layerText, renderX, renderY)
       renderY = renderY + shoveProfiler.config.lineHeight
