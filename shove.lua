@@ -167,7 +167,7 @@ local function createLayer(layerName, options)
   end
 
   -- Determine if this is a special layer
-  local isSpecial = layerName == "_composite" or layerName == "_tmp"
+  local isSpecial = layerName == "_composite" or layerName == "_effects"
 
   local layer = {
     name = layerName,
@@ -257,10 +257,10 @@ local function applyEffects(canvas, effects)
     local _canvas = love.graphics.getCanvas()
 
     -- Create temp canvas if needed
-    local tmpLayer = state.layers.byName["_tmp"]
+    local tmpLayer = state.layers.byName["_effects"]
     if not tmpLayer then
-      tmpLayer = createLayer("_tmp", { visible = false })
-      tmpLayer.isSpecial = true -- Ensure the temporary layer is marked as special
+      tmpLayer = createLayer("_effects", { visible = false })
+      tmpLayer.isSpecial = true
     end
     -- Ensure the temporary canvas exists
     ensureLayerCanvas(tmpLayer)
@@ -861,7 +861,7 @@ local shove = {
     end
 
     -- Check for reserved names
-    if layerName == "_composite" or layerName == "_tmp" then
+    if layerName == "_composite" or layerName == "_effects" then
       error("shove.createLayer: '"..layerName.."' is a reserved layer name", 2)
     end
 
