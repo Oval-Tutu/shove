@@ -68,6 +68,7 @@ local state = {
 ---@field effects love.Shader[] Array of shader effects to apply
 ---@field blendMode love.BlendMode Blend mode for the layer
 ---@field maskLayer string|nil Name of layer to use as mask
+---@field maskLayerRef ShoveLayer|nil Direct reference to mask layer
 ---@field isSpecial boolean Whether this is a special internal layer
 
 --- Creates mask shader for layer masking
@@ -179,6 +180,7 @@ local function createLayer(layerName, options)
     blendMode = options.blendMode or "alpha",
     blendAlphaMode = options.blendAlphaMode or "alphamultiply",
     maskLayer = nil,
+    maskLayerRef = nil,
     isSpecial = isSpecial
   }
 
@@ -314,6 +316,7 @@ local function beginLayerDraw(layerName)
       blendMode = "alpha",
       blendAlphaMode = "alphamultiply",
       maskLayer = nil,
+      maskLayerRef = nil,
       isSpecial = false -- Mark as non-special by default
     }
 
@@ -398,7 +401,8 @@ local function compositeLayersOnScreen(globalEffects, applyPersistentEffects)
       if layer.canvas then  -- Only process layers that have a canvas
         -- Apply mask if needed
         if layer.maskLayer then
-          local maskLayer = byNameLayers[layer.maskLayer]
+          -- Use the direct reference instead of looking up by name
+          local maskLayer = layer.maskLayerRef
           if maskLayer and maskLayer.canvas then
             -- Clear stencil buffer first
             love.graphics.clear(false, false, true)
@@ -639,6 +643,7 @@ local shove = {
         blendMode = "alpha",
         blendAlphaMode = "alphamultiply",
         maskLayer = nil,
+        maskLayerRef = nil,
         isSpecial = false
       }
       table.insert(state.layers.ordered, state.layers.byName["default"])
@@ -1157,10 +1162,14 @@ local shove = {
       if not maskLayer then
         return false
       end
+      -- Store both the name and direct reference to the mask layer
       layer.maskLayer = maskName
+      layer.maskLayerRef = maskLayer
       layer.stencil = true
     else
+      -- Clear both mask values
       layer.maskLayer = nil
+      layer.maskLayerRef = nil
     end
 
     return true
