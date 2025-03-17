@@ -345,8 +345,13 @@ local function compositeLayersOnScreen(globalEffects, applyPersistentEffects)
     createCompositeLayer()
   end
 
+  -- Cache frequently accessed state properties
+  local orderedLayers = state.layers.ordered
+  local compositeLayers = state.layers.composite
+  local byNameLayers = state.layers.byName
+
   -- Ensure composite layer has a canvas
-  ensureLayerCanvas(state.layers.composite)
+  ensureLayerCanvas(compositeLayers)
 
   -- Create mask shader if it doesn't exist
   if not state.maskShader then
@@ -361,13 +366,13 @@ local function compositeLayersOnScreen(globalEffects, applyPersistentEffects)
   love.graphics.clear()
 
   -- Draw all visible layers in order
-  for _, layer in ipairs(state.layers.ordered) do
+  for _, layer in ipairs(orderedLayers) do
     if layer.visible and layer.name ~= "_composite" and layer.name ~= "_tmp" then
       -- Skip layers without canvas (never drawn to)
       if layer.canvas then  -- Only process layers that have a canvas
         -- Apply mask if needed
         if layer.maskLayer then
-          local maskLayer = getLayer(layer.maskLayer)
+          local maskLayer = byNameLayers[layer.maskLayer]
           if maskLayer and maskLayer.canvas then
             -- Clear stencil buffer first
             love.graphics.clear(false, false, true)
@@ -412,8 +417,8 @@ local function compositeLayersOnScreen(globalEffects, applyPersistentEffects)
     -- Only apply persistent global effects when requested
     if applyPersistentEffects then
       -- Start with persistent effects if available
-      if state.layers.composite and #state.layers.composite.effects > 0 then
-        for _, effect in ipairs(state.layers.composite.effects) do
+      if compositeLayers and #compositeLayers.effects > 0 then
+        for _, effect in ipairs(compositeLayers.effects) do
           table.insert(effects, effect)
         end
       end
@@ -429,7 +434,7 @@ local function compositeLayersOnScreen(globalEffects, applyPersistentEffects)
     love.graphics.setBlendMode("alpha", "premultiplied")
 
     if effects and #effects > 0 then
-      applyEffects(state.layers.composite.canvas, effects)
+      applyEffects(compositeLayers.canvas, effects)
     else
       love.graphics.draw(state.layers.composite.canvas)
     end
@@ -760,7 +765,7 @@ local shove = {
       love.graphics.pop()
 
       -- Clear all layer canvases that exist
-      for name, layer in pairs(state.layers.byName) do
+            for name, layer in pairs(state.layers.byName) do
         if name ~= "_composite" and name ~= "_tmp" and layer.canvas then
           -- Only try to clear canvases that actually exist
           love.graphics.setCanvas(layer.canvas)
