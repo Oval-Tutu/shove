@@ -7,7 +7,6 @@ return function()
     shader1 = love.graphics.newShader("multiple-shaders/shader1.glsl")
     shader2 = love.graphics.newShader("multiple-shaders/shader2.glsl")
 
-    shove.createLayer("shaders", { zIndex = 10 })
     -- Add global effects to chain multiple shaders
     shove.addGlobalEffect(shader1)
     shove.addGlobalEffect(shader2)
@@ -21,7 +20,7 @@ return function()
   end
 
   function love.draw()
-    shove.beginDraw("shaders")
+    shove.beginDraw()
       love.graphics.setBackgroundColor(0, 0, 0)
       love.graphics.draw(
         image,
