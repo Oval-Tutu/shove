@@ -48,7 +48,7 @@ local state = {
   -- Tracking for special layer usage during frame rendering
   specialLayerUsage = {
     compositeSwitches = 0,  -- How many times the composite layer was used
-    tempSwitches = 0,       -- How many times the temp layer was used
+    effectBufferSwitches = 0,       -- How many times the temp layer was used
     effectsApplied = 0      -- How many effect applications occurred
   }
 }
@@ -256,18 +256,18 @@ local function applyEffects(canvas, effects)
   else
     local _canvas = love.graphics.getCanvas()
 
-    -- Create temp canvas if needed
-    local tmpLayer = state.layers.byName["_effects"]
-    if not tmpLayer then
-      tmpLayer = createLayer("_effects", { visible = false })
-      tmpLayer.isSpecial = true
+    -- Create transient effects canvas if needed
+    local fxLayer = state.layers.byName["_effects"]
+    if not fxLayer then
+      fxLayer = createLayer("_effects", { visible = false })
+      fxLayer.isSpecial = true
     end
     -- Ensure the temporary canvas exists
-    ensureLayerCanvas(tmpLayer)
-    local tmpCanvas = tmpLayer.canvas
+    ensureLayerCanvas(fxLayer)
+    local fxCanvas = fxLayer.canvas
 
-    -- Track temp layer switch
-    state.specialLayerUsage.tempSwitches = state.specialLayerUsage.tempSwitches + 1
+    -- Track effects buffer switching
+    state.specialLayerUsage.effectBufferSwitches = state.specialLayerUsage.effectBufferSwitches + 1
 
     local outputCanvas
     local inputCanvas
@@ -275,14 +275,13 @@ local function applyEffects(canvas, effects)
     love.graphics.push()
     love.graphics.origin()
     for i = 1, #effects do
-      inputCanvas = i % 2 == 1 and canvas or tmpCanvas
-      outputCanvas = i % 2 == 0 and canvas or tmpCanvas
+      inputCanvas = i % 2 == 1 and canvas or fxCanvas
+      outputCanvas = i % 2 == 0 and canvas or fxCanvas
       love.graphics.setCanvas(outputCanvas)
       love.graphics.clear()
       love.graphics.setShader(effects[i])
       love.graphics.draw(inputCanvas)
       love.graphics.setCanvas(inputCanvas)
-
       -- Track effects application
       state.specialLayerUsage.effectsApplied = state.specialLayerUsage.effectsApplied + 1
     end
@@ -730,7 +729,7 @@ local shove = {
 
     -- Reset special layer usage counters at the start of each frame
     state.specialLayerUsage.compositeSwitches = 0
-    state.specialLayerUsage.tempSwitches = 0
+    state.specialLayerUsage.effectBufferSwitches = 0
     state.specialLayerUsage.effectsApplied = 0
 
     -- Set flag to indicate we're in drawing mode
@@ -1674,7 +1673,7 @@ local shove = {
       -- Include special layer usage information
       specialLayerUsage = {
         compositeSwitches = state.specialLayerUsage.compositeSwitches,
-        tempSwitches = state.specialLayerUsage.tempSwitches,
+        effectBufferSwitches = state.specialLayerUsage.effectBufferSwitches,
         effectsApplied = state.specialLayerUsage.effectsApplied
       }
     }
