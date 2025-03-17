@@ -188,6 +188,8 @@ end
 --- Collects static system metrics that don't change during runtime
 ---@return nil
 local function collectStaticMetrics()
+  local major, minor, revision = love.getVersion()
+  shoveProfiler.metrics.loveVersion = string.format("%d.%d", major, minor)
   shoveProfiler.metrics.arch = love.system.getOS() ~= "Web" and require("ffi").arch or "Web"
   shoveProfiler.metrics.os = love.system.getOS()
   shoveProfiler.metrics.cpuCount = love.system.getProcessorCount()
@@ -201,7 +203,7 @@ local function collectStaticMetrics()
 
   -- Cache hardware information
   cachedHardwareInfo = {
-    string.format("%s (%s): %s x CPU", shoveProfiler.metrics.os, shoveProfiler.metrics.arch, shoveProfiler.metrics.cpuCount),
+    string.format("%s %s (%s x CPU)", shoveProfiler.metrics.os, shoveProfiler.metrics.arch, shoveProfiler.metrics.cpuCount),
     string.format("%s (%s)", shoveProfiler.metrics.rendererName, shoveProfiler.metrics.rendererVendor),
     string.format("%s", shoveProfiler.metrics.rendererDevice:sub(1,23)),
     string.format("%s", shoveProfiler.metrics.rendererVersion:sub(1,30)),
@@ -254,8 +256,8 @@ local function setupMetricsCollector()
 
     -- Build cached performance info
     cachedPerformanceInfo = {
-      string.format("FPS: %.0f (%.1f ms)", shoveProfiler.metrics.fps or 0, frameTime),
-      string.format("VSync: %s", shoveProfiler.state.isVsyncEnabled and "On" or "Off"),
+      string.format("LÖVE %s ", shoveProfiler.metrics.loveVersion),
+      string.format("FPS: %.0f (%.1f ms) [vsync: %s]", shoveProfiler.metrics.fps or 0, frameTime, shoveProfiler.state.isVsyncEnabled and "on" or "off"),
       string.format("Draw Calls: %d (%d batched)", stats.drawcalls or 0, stats.drawcallsbatched or 0),
       string.format("Canvases: %d (%d switches)", stats.canvases or 0, stats.canvasswitches or 0),
       string.format("Shader Switches: %d", stats.shaderswitches or 0),
@@ -289,14 +291,21 @@ local function setupMetricsCollector()
       local specialUsage = state.specialLayerUsage or {}
 
       cachedLayerInfo = {
-        string.format("Layers: %d (%d with canvas)",
+        string.format("Layers: %d (%d canvases)",
           state.layers.count or 0,
           canvasCount),
-        string.format("Special: %d comp, %d temp, %d fx",
-          specialUsage.compositeSwitches or 0,
-          specialUsage.tempSwitches or 0,
-          specialUsage.effectsApplied or 0)
+        string.format("Composites: %d", specialUsage.compositeSwitches or 0),
       }
+
+      -- Only add Effects line if any effects were applied
+      if (specialUsage.effectsApplied or 0) > 0 then
+        table.insert(cachedLayerInfo,
+        string.format("Effects: %d (%d %s)",
+          specialUsage.effectsApplied,
+          specialUsage.effectBufferSwitches or 0,
+          (specialUsage.effectBufferSwitches or 0) == 1 and "switch" or "switches")
+        )
+      end
     end
     updatePanelDimensions()
   end
@@ -376,36 +385,31 @@ local function renderLayerInfo(renderX, renderY)
 
   local color = shoveProfiler.config.colors.white
   local old_color = nil
-  local layer = state.layers.ordered
+  local layers = state.layers.ordered
   local layerText = ""
 
-  for i=1, #layer do
-    if layer[i] and layer[i].name and not layer[i].isSpecial then
-      -- Include effects count in display if there are any
-      local effectsInfo = layer[i].effects > 0 and " [" .. layer[i].effects .. " fx]" or ""
-
+  for i=1, #layers do
+    local layer = layers[i]
+    if layer and layer.name and not layer.isSpecial then
+      local effectsInfo = layer.effects > 0 and " [" .. layer.effects .. " fx]" or ""
       layerText = string.format(
-        "%d: %s (%s/%s)%s",
-        layer[i].zIndex or 0,
-        layer[i].name,
-        layer[i].blendMode or "alpha",
-        (layer[i].blendAlphaMode and layer[i].blendAlphaMode:sub(1,4)) or "alph",
+        "%d: %s %s",
+        layer.zIndex or 0,
+        layer.name,
         effectsInfo
       )
+      color = shoveProfiler.config.colors.white
 
-      -- Set color based on layer status
-      color = shoveProfiler.config.colors.white -- Default color
-
-      if layer[i].name == state.layers.active then
-        color = shoveProfiler.config.colors.green -- Active layer
+      if layer.name == state.layers.active then
+        color = shoveProfiler.config.colors.green
       end
 
-      if not layer[i].visible then
-        color = shoveProfiler.config.colors.red -- Hidden layer
+      if not layer.visible then
+        color = shoveProfiler.config.colors.red
       end
 
-      if not layer[i].hasCanvas then
-        color = shoveProfiler.config.colors.midGray -- No canvas allocated
+      if not layer.hasCanvas then
+        color = shoveProfiler.config.colors.midGray
       end
 
       if color ~= old_color then
