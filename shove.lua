@@ -335,7 +335,7 @@ local function beginLayerDraw(layerName)
   -- Set as current layer and activate canvas
   state.layers.active = layer
   love.graphics.setCanvas({ layer.canvas, stencil = layer.stencil })
-  love.graphics.clear() -- Clear the canvas when beginning to draw
+  love.graphics.clear()
 
   return true
 end
@@ -379,19 +379,28 @@ local function compositeLayersOnScreen(globalEffects, applyPersistentEffects)
   local compositeLayers = state.layers.composite
   local byNameLayers = state.layers.byName
 
+  -- Check if any visible layer has a mask
+  local anyActiveMasks = false
+  for _, layer in ipairs(orderedLayers) do
+    if layer.visible and not layer.isSpecial and layer.canvas and layer.maskLayer then
+      anyActiveMasks = true
+      break
+    end
+  end
+
   -- Ensure composite layer has a canvas
   ensureLayerCanvas(compositeLayers)
 
-  -- Create mask shader if it doesn't exist
-  if not state.maskShader then
+  -- Create mask shader if masks are needed and shader doesn't exist
+  if anyActiveMasks and not state.maskShader then
     createMaskShader()
   end
 
   -- Store current blend mode
   local currentBlendMode, currentAlphaMode = love.graphics.getBlendMode()
 
-  -- Prepare composite - add stencil=true to enable stencil operations
-  love.graphics.setCanvas({ state.layers.composite.canvas, stencil = true })
+  -- Prepare composite - add stencil=true only if masks are used
+  love.graphics.setCanvas({ state.layers.composite.canvas, stencil = anyActiveMasks })
   love.graphics.clear()
 
   -- Draw all visible layers in order
@@ -1167,9 +1176,10 @@ local shove = {
       layer.maskLayerRef = maskLayer
       layer.stencil = true
     else
-      -- Clear both mask values
+      -- Clear mask values
       layer.maskLayer = nil
       layer.maskLayerRef = nil
+      layer.stencil = false
     end
 
     return true
