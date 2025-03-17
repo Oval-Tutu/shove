@@ -239,6 +239,9 @@ local function setupMetricsCollector()
     local memoryMB = shoveProfiler.metrics.memory / 1024
     local frameTime = love.timer.getDelta() * 1000
 
+    -- Calculate font count and adjust for the profiler's default fonts
+    local fontCount = stats.fonts and (stats.fonts - 2) or 0
+
     -- Calculate total particle count
     local totalParticles = 0
     for ps, _ in pairs(shoveProfiler.particles.systems) do
@@ -257,7 +260,7 @@ local function setupMetricsCollector()
       string.format("Shader Switches: %d", stats.shaderswitches or 0),
       string.format("Particles: %d", totalParticles),
       string.format("Images: %d", stats.images or 0),
-      string.format("Fonts: %d", stats.fonts or 0),
+      string.format("Fonts: %d", fontCount),
       string.format("VRAM: %.1f MB", textureMemoryMB),
       string.format("RAM: %.1f MB", memoryMB),
       ""
