@@ -691,9 +691,14 @@ local shove = {
         state.layers.active = state.layers.byName["default"]
       end
 
-      -- DON'T activate any canvas yet - wait until an actual layer is used
-      -- This prevents automatic canvas creation for the default layer
-      -- We'll set the appropriate canvas when beginLayer is called
+      -- If the default layer has a canvas (which would happen if global effects were added),
+      -- activate it so drawing commands go to it
+      if state.layers.active and state.layers.active.name == "default" and
+         state.layers.active.canvas then
+        love.graphics.setCanvas({ state.layers.active.canvas, stencil = state.layers.active.stencil })
+        love.graphics.clear()
+      end
+      -- Otherwise, wait until beginLayer is explicitly called
 
     else
       love.graphics.translate(state.offset_x, state.offset_y)
@@ -727,6 +732,27 @@ local shove = {
       -- Ensure active layer is finished
       if state.layers.active then
         endLayerDraw()
+      end
+
+      -- If there are global effects but no layer has been drawn to,
+      -- ensure we have at least the default layer with a canvas
+      local hasGlobalEffects = (globalEffects and #globalEffects > 0) or
+                               (state.layers.composite and #state.layers.composite.effects > 0)
+
+      if hasGlobalEffects then
+        local anyLayerHasCanvas = false
+        -- Check if any visible layer has a canvas
+        for _, layer in ipairs(state.layers.ordered) do
+          if layer.visible and layer.name ~= "_composite" and layer.name ~= "_tmp" and layer.canvas then
+            anyLayerHasCanvas = true
+            break
+          end
+        end
+
+        -- If no canvas exists but we have effects, create one for default layer
+        if not anyLayerHasCanvas and state.layers.byName["default"] then
+          ensureLayerCanvas(state.layers.byName["default"])
+        end
       end
 
       -- Composite and draw layers to screen (always apply global persistent effects in endDraw)
@@ -1280,9 +1306,19 @@ local shove = {
       error("shove.addGlobalEffect: effect must be a shader object", 2)
     end
 
+    -- Ensure we have a composite layer
     if not state.layers.composite then
       createCompositeLayer()
     end
+
+    -- If any global effects are added, we need to ensure there's at least one layer with a canvas
+    -- This is for cases where games use global effects but don't explicitly use layers
+    if state.renderMode == "layer" and state.layers.byName["default"] then
+      -- Force canvas creation for default layer if global effects are being used
+      -- This ensures we'll have something to apply the effects to
+      ensureLayerCanvas(state.layers.byName["default"])
+    end
+
     return addEffect(state.layers.composite, effect)
   end,
 
