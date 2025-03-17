@@ -416,30 +416,26 @@ local function compositeLayersOnScreen(globalEffects, applyPersistentEffects)
             -- Clear stencil buffer first
             love.graphics.clear(false, false, true)
             love.graphics.stencil(function()
-            -- Use mask shader to properly handle transparent pixels
-            love.graphics.setShader(state.maskShader)
-            love.graphics.draw(maskLayer.canvas)
-            love.graphics.setShader()
-          end, "replace", 1)
-          -- Only draw where stencil value equals 1
-          love.graphics.setStencilTest("equal", 1)
+              -- Use mask shader to properly handle transparent pixels
+              love.graphics.setShader(state.maskShader)
+              love.graphics.draw(maskLayer.canvas)
+              love.graphics.setShader()
+            end, "replace", 1)
+            -- Only draw where stencil value equals 1
+            love.graphics.setStencilTest("equal", 1)
+          end
         end
-      end
 
-      -- Use premultiplied alpha when drawing canvases
-      -- But respect the layer's blend mode
-      love.graphics.setBlendMode(layer.blendMode, "premultiplied")
+        -- Use premultiplied alpha when drawing canvases
+        -- But respect the layer's blend mode
+        love.graphics.setBlendMode(layer.blendMode, "premultiplied")
 
-      -- Apply layer effects or draw directly
-      if #layer.effects > 0 then
+        -- Apply effects (or draw directly if no effects)
         applyEffects(layer.canvas, layer.effects)
-      else
-        love.graphics.draw(layer.canvas)
-      end
 
-      -- Reset stencil if used
-      if layer.maskLayer then
-        love.graphics.setStencilTest()
+        -- Reset stencil if used
+        if layer.maskLayer then
+          love.graphics.setStencilTest()
         end
       end
     end
@@ -454,37 +450,35 @@ local function compositeLayersOnScreen(globalEffects, applyPersistentEffects)
   -- Draw composite to screen with scaling
   love.graphics.translate(state.offset_x, state.offset_y)
   love.graphics.push()
-    love.graphics.scale(state.scale_x, state.scale_y)
+  love.graphics.scale(state.scale_x, state.scale_y)
 
-    -- Clear shared effects table instead of creating a new one
-    for k in pairs(sharedEffectsTable) do
-      sharedEffectsTable[k] = nil
-    end
+  -- Clear shared effects table instead of creating a new one
+  for k in pairs(sharedEffectsTable) do
+    sharedEffectsTable[k] = nil
+  end
 
-    -- Only apply persistent global effects when requested
-    if applyPersistentEffects then
-      -- Start with persistent effects if available
-      if state.layers.composite and #state.layers.composite.effects > 0 then
-        for _, effect in ipairs(state.layers.composite.effects) do
-          table.insert(sharedEffectsTable, effect)
-        end
-      end
-    end
-    -- Append any transient effects
-    if globalEffects and #globalEffects > 0 then
-      for _, effect in ipairs(globalEffects) do
+  -- Only apply persistent global effects when requested
+  if applyPersistentEffects then
+    -- Start with persistent effects if available
+    if state.layers.composite and #state.layers.composite.effects > 0 then
+      for _, effect in ipairs(state.layers.composite.effects) do
         table.insert(sharedEffectsTable, effect)
       end
     end
-
-    -- Use premultiplied alpha when drawing the composite canvas to screen
-    love.graphics.setBlendMode("alpha", "premultiplied")
-
-    if #sharedEffectsTable > 0 then
-      applyEffects(state.layers.composite.canvas, sharedEffectsTable)
-    else
-      love.graphics.draw(state.layers.composite.canvas)
+  end
+  -- Append any transient effects
+  if globalEffects and #globalEffects > 0 then
+    for _, effect in ipairs(globalEffects) do
+      table.insert(sharedEffectsTable, effect)
     end
+  end
+
+  -- Use premultiplied alpha when drawing the composite canvas to screen
+  love.graphics.setBlendMode("alpha", "premultiplied")
+
+  -- Apply effects (or draw directly if no effects)
+  applyEffects(state.layers.composite.canvas, sharedEffectsTable)
+
   love.graphics.pop()
   love.graphics.translate(-state.offset_x, -state.offset_y)
 
