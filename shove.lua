@@ -61,6 +61,7 @@ local state = {
 ---@field effects love.Shader[] Array of shader effects to apply
 ---@field blendMode love.BlendMode Blend mode for the layer
 ---@field maskLayer string|nil Name of layer to use as mask
+---@field isSpecial boolean Whether this is a special internal layer
 
 --- Creates mask shader for layer masking
 local function createMaskShader()
@@ -157,6 +158,9 @@ local function createLayer(layerName, options)
     return state.layers.byName[layerName]
   end
 
+  -- Determine if this is a special layer
+  local isSpecial = layerName == "_composite" or layerName == "_tmp"
+
   local layer = {
     name = layerName,
     zIndex = options.zIndex or (#state.layers.ordered + 1),
@@ -167,7 +171,8 @@ local function createLayer(layerName, options)
     effects = options.effects or {},
     blendMode = options.blendMode or "alpha",
     blendAlphaMode = options.blendAlphaMode or "alphamultiply",
-    maskLayer = nil
+    maskLayer = nil,
+    isSpecial = isSpecial
   }
 
   state.layers.byName[layerName] = layer
@@ -210,7 +215,8 @@ local function createCompositeLayer()
     zIndex = 9999, -- Always rendered last
     canvas = nil,  -- Deferred canvas creation
     visible = true,
-    effects = {}
+    effects = {},
+    isSpecial = true -- Mark as special layer
   }
 
   state.layers.composite = composite
@@ -243,6 +249,7 @@ local function applyEffects(canvas, effects)
     local tmpLayer = state.layers.byName["_tmp"]
     if not tmpLayer then
       tmpLayer = createLayer("_tmp", { visible = false })
+      tmpLayer.isSpecial = true -- Ensure the temporary layer is marked as special
     end
     -- Ensure the temporary canvas exists
     ensureLayerCanvas(tmpLayer)
@@ -291,7 +298,8 @@ local function beginLayerDraw(layerName)
       effects = {},
       blendMode = "alpha",
       blendAlphaMode = "alphamultiply",
-      maskLayer = nil
+      maskLayer = nil,
+      isSpecial = false -- Mark as non-special by default
     }
 
     state.layers.byName[layerName] = layer
@@ -370,7 +378,7 @@ local function compositeLayersOnScreen(globalEffects, applyPersistentEffects)
 
   -- Draw all visible layers in order
   for _, layer in ipairs(orderedLayers) do
-    if layer.visible and layer.name ~= "_composite" and layer.name ~= "_tmp" then
+    if layer.visible and not layer.isSpecial then
       -- Skip layers without canvas (never drawn to)
       if layer.canvas then  -- Only process layers that have a canvas
         -- Apply mask if needed
@@ -612,7 +620,8 @@ local shove = {
         effects = {},
         blendMode = "alpha",
         blendAlphaMode = "alphamultiply",
-        maskLayer = nil
+        maskLayer = nil,
+        isSpecial = false
       }
       table.insert(state.layers.ordered, state.layers.byName["default"])
 
@@ -756,7 +765,7 @@ local shove = {
         local anyLayerHasCanvas = false
         -- Check if any visible layer has a canvas
         for _, layer in ipairs(state.layers.ordered) do
-          if layer.visible and layer.name ~= "_composite" and layer.name ~= "_tmp" and layer.canvas then
+          if layer.visible and not layer.isSpecial and layer.canvas then
             anyLayerHasCanvas = true
             break
           end
@@ -773,8 +782,8 @@ local shove = {
       love.graphics.pop()
 
       -- Clear all layer canvases that exist
-            for name, layer in pairs(state.layers.byName) do
-        if name ~= "_composite" and name ~= "_tmp" and layer.canvas then
+      for name, layer in pairs(state.layers.byName) do
+        if not layer.isSpecial and layer.canvas then
           -- Only try to clear canvases that actually exist
           love.graphics.setCanvas(layer.canvas)
           love.graphics.clear()
