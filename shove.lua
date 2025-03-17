@@ -1626,6 +1626,13 @@ local shove = {
     local orderedLayerInfo = {}
     local canvasCount = 0
     local specialLayerCount = 0
+    local globalEffectsCount = 0
+
+    -- Calculate global effects count if composite layer exists
+    if state.layers.composite and state.layers.composite.effects then
+      globalEffectsCount = #state.layers.composite.effects
+    end
+
     if state.renderMode == "layer" and #state.layers.ordered > 0 then
       for _, layer in ipairs(state.layers.ordered) do
         -- Count layers with canvas
@@ -1663,6 +1670,7 @@ local shove = {
       scale_y = state.scale_y,
       offset_x = state.offset_x,
       offset_y = state.offset_y,
+      global_effects_count = globalEffectsCount,
       layers = state.renderMode == "layer" and {
         count = #state.layers.ordered,
         canvas_count = canvasCount,
