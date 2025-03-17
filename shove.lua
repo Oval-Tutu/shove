@@ -49,8 +49,13 @@ local state = {
   specialLayerUsage = {
     compositeSwitches = 0,  -- How many times the composite layer was used
     effectBufferSwitches = 0,       -- How many times the temp layer was used
-    effectsApplied = 0      -- How many effect applications occurred
-  }
+    effectsApplied = 0,      -- How many effect applications occurred
+    batchGroups = 0,        -- Number of batch groups processed
+    batchedLayers = 0,      -- Total number of layers processed in batches
+    stateChanges = 0        -- Number of rendering state changes
+  },
+  -- Whether to use batch processing for similar layers
+  enableBatching = true
 }
 
 ---@class ShoveLayerSystem
@@ -232,6 +237,49 @@ local function createCompositeLayer()
   return composite
 end
 
+--- Generate a signature string for a layer based on its properties
+---@param layer ShoveLayer Layer to generate signature for
+---@return string signature A string representing the layer's key properties
+local function getLayerSignature(layer)
+  if not layer then return "" end
+
+  -- Start with blend mode
+  local sig = layer.blendMode or "alpha"
+
+  -- Add mask status
+  sig = sig .. "|" .. (layer.maskLayer and "masked" or "unmasked")
+
+  -- Add effects signature (simple count for now)
+  sig = sig .. "|" .. (#layer.effects)
+
+  return sig
+end
+
+--- Group layers by their rendering properties
+---@param layers ShoveLayer[] Array of layers to group
+---@return table groups Table of layer groups indexed by signature
+local function groupLayersByProperties(layers)
+  local groups = {}
+
+  for _, layer in ipairs(layers) do
+    if layer.visible and not layer.isSpecial and layer.canvas then
+      local signature = getLayerSignature(layer)
+
+      groups[signature] = groups[signature] or {
+        signature = signature,
+        layers = {},
+        blendMode = layer.blendMode,
+        hasMask = layer.maskLayer ~= nil,
+        effectsCount = #layer.effects
+      }
+
+      table.insert(groups[signature].layers, layer)
+    end
+  end
+
+  return groups
+end
+
 --- Apply a set of shader effects to a canvas
 ---@param canvas love.Canvas Canvas to apply effects to
 ---@param effects love.Shader[] Array of shader effects
@@ -351,6 +399,58 @@ local function endLayerDraw()
   return false
 end
 
+--- Draw a batch of layers with similar properties
+---@param layerGroup table Group of layers with similar properties
+local function drawLayerBatch(layerGroup)
+  if not layerGroup or #layerGroup.layers == 0 then return end
+
+  -- Set blend mode once for the entire group
+  love.graphics.setBlendMode(layerGroup.blendMode, "premultiplied")
+  state.specialLayerUsage.stateChanges = state.specialLayerUsage.stateChanges + 1
+
+  -- For masked layers or layers with effects, process individually
+  if layerGroup.hasMask or layerGroup.effectsCount > 0 then
+    for _, layer in ipairs(layerGroup.layers) do
+      -- Apply mask if needed
+      if layer.maskLayer then
+        -- Use the direct reference instead of looking up by name
+        local maskLayer = layer.maskLayerRef
+        if maskLayer and maskLayer.canvas then
+          -- Clear stencil buffer first
+          love.graphics.clear(false, false, true)
+          love.graphics.stencil(function()
+            -- Use mask shader to properly handle transparent pixels
+            love.graphics.setShader(state.maskShader)
+            love.graphics.draw(maskLayer.canvas)
+            love.graphics.setShader()
+          end, "replace", 1)
+          -- Only draw where stencil value equals 1
+          love.graphics.setStencilTest("equal", 1)
+          state.specialLayerUsage.stateChanges = state.specialLayerUsage.stateChanges + 1
+        end
+      end
+
+      -- Apply effects (or draw directly if no effects)
+      applyEffects(layer.canvas, layer.effects)
+
+      -- Reset stencil if used
+      if layer.maskLayer then
+        love.graphics.setStencilTest()
+        state.specialLayerUsage.stateChanges = state.specialLayerUsage.stateChanges + 1
+      end
+    end
+  else
+    -- For layers without masks and effects, draw them all at once
+    for _, layer in ipairs(layerGroup.layers) do
+      love.graphics.draw(layer.canvas)
+    end
+
+    -- Count as a batch
+    state.specialLayerUsage.batchGroups = state.specialLayerUsage.batchGroups + 1
+    state.specialLayerUsage.batchedLayers = state.specialLayerUsage.batchedLayers + #layerGroup.layers
+  end
+end
+
 --- Composite all layers to screen
 ---@param globalEffects love.Shader[]|nil Optional effects to apply globally
 ---@param applyPersistentEffects boolean Whether to apply persistent global effects
@@ -367,6 +467,11 @@ local function compositeLayersOnScreen(globalEffects, applyPersistentEffects)
   if state.renderMode ~= "layer" then
     return false
   end
+
+  -- Reset batch metrics
+  state.specialLayerUsage.batchGroups = 0
+  state.specialLayerUsage.batchedLayers = 0
+  state.specialLayerUsage.stateChanges = 0
 
   -- Ensure we have a composite layer
   if not state.layers.composite then
@@ -402,39 +507,52 @@ local function compositeLayersOnScreen(globalEffects, applyPersistentEffects)
   love.graphics.setCanvas({ state.layers.composite.canvas, stencil = anyActiveMasks })
   love.graphics.clear()
 
-  -- Draw all visible layers in order
-  for _, layer in ipairs(orderedLayers) do
-    if layer.visible and not layer.isSpecial then
-      -- Skip layers without canvas (never drawn to)
-      if layer.canvas then  -- Only process layers that have a canvas
-        -- Apply mask if needed
-        if layer.maskLayer then
-          -- Use the direct reference instead of looking up by name
-          local maskLayer = layer.maskLayerRef
-          if maskLayer and maskLayer.canvas then
-            -- Clear stencil buffer first
-            love.graphics.clear(false, false, true)
-            love.graphics.stencil(function()
-              -- Use mask shader to properly handle transparent pixels
-              love.graphics.setShader(state.maskShader)
-              love.graphics.draw(maskLayer.canvas)
-              love.graphics.setShader()
-            end, "replace", 1)
-            -- Only draw where stencil value equals 1
-            love.graphics.setStencilTest("equal", 1)
+  if state.enableBatching then
+    -- Group layers by properties for batch processing
+    local layerGroups = groupLayersByProperties(orderedLayers)
+
+    -- Process each group of layers
+    for _, group in pairs(layerGroups) do
+      drawLayerBatch(group)
+    end
+  else
+    -- Traditional layer-by-layer processing
+    for _, layer in ipairs(orderedLayers) do
+      if layer.visible and not layer.isSpecial then
+        -- Skip layers without canvas (never drawn to)
+        if layer.canvas then  -- Only process layers that have a canvas
+          -- Apply mask if needed
+          if layer.maskLayer then
+            -- Use the direct reference instead of looking up by name
+            local maskLayer = layer.maskLayerRef
+            if maskLayer and maskLayer.canvas then
+              -- Clear stencil buffer first
+              love.graphics.clear(false, false, true)
+              love.graphics.stencil(function()
+                -- Use mask shader to properly handle transparent pixels
+                love.graphics.setShader(state.maskShader)
+                love.graphics.draw(maskLayer.canvas)
+                love.graphics.setShader()
+              end, "replace", 1)
+              -- Only draw where stencil value equals 1
+              love.graphics.setStencilTest("equal", 1)
+              state.specialLayerUsage.stateChanges = state.specialLayerUsage.stateChanges + 1
+            end
           end
-        end
 
-        -- Use premultiplied alpha when drawing canvases
-        -- But respect the layer's blend mode
-        love.graphics.setBlendMode(layer.blendMode, "premultiplied")
+          -- Use premultiplied alpha when drawing canvases
+          -- But respect the layer's blend mode
+          love.graphics.setBlendMode(layer.blendMode, "premultiplied")
+          state.specialLayerUsage.stateChanges = state.specialLayerUsage.stateChanges + 1
 
-        -- Apply effects (or draw directly if no effects)
-        applyEffects(layer.canvas, layer.effects)
+          -- Apply effects (or draw directly if no effects)
+          applyEffects(layer.canvas, layer.effects)
 
-        -- Reset stencil if used
-        if layer.maskLayer then
-          love.graphics.setStencilTest()
+          -- Reset stencil if used
+          if layer.maskLayer then
+            love.graphics.setStencilTest()
+            state.specialLayerUsage.stateChanges = state.specialLayerUsage.stateChanges + 1
+          end
         end
       end
     end
@@ -731,6 +849,9 @@ local shove = {
     state.specialLayerUsage.compositeSwitches = 0
     state.specialLayerUsage.effectBufferSwitches = 0
     state.specialLayerUsage.effectsApplied = 0
+    state.specialLayerUsage.batchGroups = 0
+    state.specialLayerUsage.batchedLayers = 0
+    state.specialLayerUsage.stateChanges = 0
 
     -- Set flag to indicate we're in drawing mode
     state.inDrawMode = true
@@ -1628,6 +1749,25 @@ local shove = {
     return true
   end,
 
+  --- Enable or disable batch processing for similar layers
+  ---@param enable boolean Whether to enable batch processing
+  ---@return boolean previous Previous batching state
+  setLayerBatching = function(enable)
+    if type(enable) ~= "boolean" then
+      error("shove.setLayerBatching: enable must be a boolean", 2)
+    end
+
+    local previous = state.enableBatching
+    state.enableBatching = enable
+    return previous
+  end,
+
+  --- Get current batch processing state
+  ---@return boolean enabled Whether batch processing is enabled
+  getLayerBatching = function()
+    return state.enableBatching
+  end,
+
   --- Return a copy of relevant state data for profiler metrics
   getState = function()
     -- Persistent caches to avoid allocations
@@ -1723,6 +1863,9 @@ local shove = {
       usage.compositeSwitches = state.specialLayerUsage.compositeSwitches
       usage.effectBufferSwitches = state.specialLayerUsage.effectBufferSwitches
       usage.effectsApplied = state.specialLayerUsage.effectsApplied
+      usage.batchGroups = state.specialLayerUsage.batchGroups
+      usage.batchedLayers = state.specialLayerUsage.batchedLayers
+      usage.stateChanges = state.specialLayerUsage.stateChanges
     elseif result.layers.ordered then
       -- Clean up layer data if not in layer render mode
       result.layers.ordered = nil

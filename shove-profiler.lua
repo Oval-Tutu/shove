@@ -312,6 +312,23 @@ local function setupMetricsCollector()
           (specialUsage.effectBufferSwitches or 0) == 1 and "switch" or "switches")
         )
       end
+
+      -- Add batching metrics if any batching occurred
+      if (specialUsage.batchGroups or 0) > 0 then
+        table.insert(cachedLayerInfo,
+          string.format("Batches: %d (%d layers)",
+            specialUsage.batchGroups,
+            specialUsage.batchedLayers or 0)
+        )
+      end
+
+      -- Add state changes metric
+      if (specialUsage.stateChanges or 0) > 0 then
+        table.insert(cachedLayerInfo,
+          string.format("State Changes: %d",
+            specialUsage.stateChanges)
+        )
+      end
     end
     updatePanelDimensions()
   end
