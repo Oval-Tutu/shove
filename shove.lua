@@ -76,6 +76,9 @@ local function createMaskShader()
   ]]
 end
 
+-- Persistent tables for reuse to minimize allocations
+local sharedEffectsTable = {}
+
 --- Ensures a layer has a valid canvas
 ---@param layer ShoveLayer Layer to check
 ---@return love.Canvas canvas The layer's canvas
@@ -413,28 +416,33 @@ local function compositeLayersOnScreen(globalEffects, applyPersistentEffects)
   love.graphics.translate(state.offset_x, state.offset_y)
   love.graphics.push()
     love.graphics.scale(state.scale_x, state.scale_y)
-    local effects = {}
+
+    -- Clear shared effects table instead of creating a new one
+    for k in pairs(sharedEffectsTable) do
+      sharedEffectsTable[k] = nil
+    end
+
     -- Only apply persistent global effects when requested
     if applyPersistentEffects then
       -- Start with persistent effects if available
-      if compositeLayers and #compositeLayers.effects > 0 then
-        for _, effect in ipairs(compositeLayers.effects) do
-          table.insert(effects, effect)
+      if state.layers.composite and #state.layers.composite.effects > 0 then
+        for _, effect in ipairs(state.layers.composite.effects) do
+          table.insert(sharedEffectsTable, effect)
         end
       end
     end
     -- Append any transient effects
     if globalEffects and #globalEffects > 0 then
       for _, effect in ipairs(globalEffects) do
-        table.insert(effects, effect)
+        table.insert(sharedEffectsTable, effect)
       end
     end
 
     -- Use premultiplied alpha when drawing the composite canvas to screen
     love.graphics.setBlendMode("alpha", "premultiplied")
 
-    if effects and #effects > 0 then
-      applyEffects(compositeLayers.canvas, effects)
+    if #sharedEffectsTable > 0 then
+      applyEffects(state.layers.composite.canvas, sharedEffectsTable)
     else
       love.graphics.draw(state.layers.composite.canvas)
     end
