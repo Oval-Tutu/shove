@@ -1620,71 +1620,112 @@ local shove = {
     return true
   end,
 
-  --- Return a copy of relevant state data for debug metrics
+  --- Return a copy of relevant state data for profiler metrics
   getState = function()
-    -- Create an ordered array of layers with basic info for profiler
-    local orderedLayerInfo = {}
-    local canvasCount = 0
-    local specialLayerCount = 0
-    local globalEffectsCount = 0
+    -- Persistent caches to avoid allocations
+    shove._stateCache = shove._stateCache or {}
+    local result = shove._stateCache
+
+    -- Cache for layer information tables
+    shove._layerInfoCache = shove._layerInfoCache or {}
+    local persistentLayerInfo = shove._layerInfoCache
+
+    -- Make sure nested tables exist
+    result.layers = result.layers or {}
+    result.specialLayerUsage = result.specialLayerUsage or {}
+
+    -- Update basic state variables (always needed)
+    result.fitMethod = state.fitMethod
+    result.renderMode = state.renderMode
+    result.scalingFilter = state.scalingFilter
+    result.screen_width = state.screen_width
+    result.screen_height = state.screen_height
+    result.viewport_width = state.viewport_width
+    result.viewport_height = state.viewport_height
+    result.rendered_width = state.rendered_width
+    result.rendered_height = state.rendered_height
+    result.scale_x = state.scale_x
+    result.scale_y = state.scale_y
+    result.offset_x = state.offset_x
+    result.offset_y = state.offset_y
 
     -- Calculate global effects count if composite layer exists
+    local globalEffectsCount = 0
     if state.layers.composite and state.layers.composite.effects then
       globalEffectsCount = #state.layers.composite.effects
     end
+    result.global_effects_count = globalEffectsCount
 
-    if state.renderMode == "layer" and #state.layers.ordered > 0 then
-      for _, layer in ipairs(state.layers.ordered) do
-        -- Count layers with canvas
-        if layer.canvas ~= nil then
-          canvasCount = canvasCount + 1
-        end
-        -- Count special layers
-        if layer.isSpecial then
-          specialLayerCount = specialLayerCount + 1
-        end
-        table.insert(orderedLayerInfo, {
-          name = layer.name,
-          zIndex = layer.zIndex,
-          visible = layer.visible,
-          blendMode = layer.blendMode,
-          blendAlphaMode = layer.blendAlphaMode,
-          hasCanvas = layer.canvas ~= nil,
-          isSpecial = layer.isSpecial,
-          effects = #layer.effects
-        })
+    -- Only compute layer info if in layer render mode
+    if state.renderMode == "layer" then
+      local layers = result.layers
+      local orderedLayers = state.layers.ordered
+      local layerCount = #orderedLayers
+
+      -- Track counts in a single pass
+      local canvasCount, specialLayerCount = 0, 0
+
+      -- Prepare ordered array if needed
+      layers.ordered = layers.ordered or {}
+      local orderedLayerInfo = layers.ordered
+
+      -- Process layers
+      for i = 1, layerCount do
+        local layer = orderedLayers[i]
+
+        -- Count special counters
+        if layer.canvas ~= nil then canvasCount = canvasCount + 1 end
+        if layer.isSpecial then specialLayerCount = specialLayerCount + 1 end
+
+        -- Reuse existing table or create new one
+        local layerInfo = persistentLayerInfo[i] or {}
+        persistentLayerInfo[i] = layerInfo
+
+        -- Update layer info (only what's needed for debug)
+        layerInfo.name = layer.name
+        layerInfo.zIndex = layer.zIndex
+        layerInfo.visible = layer.visible
+        layerInfo.blendMode = layer.blendMode
+        layerInfo.blendAlphaMode = layer.blendAlphaMode
+        layerInfo.hasCanvas = layer.canvas ~= nil
+        layerInfo.isSpecial = layer.isSpecial
+        layerInfo.effects = #layer.effects
+
+        -- Add to result array
+        orderedLayerInfo[i] = layerInfo
       end
+
+      -- Clean up any extra entries in both caches
+      for i = layerCount + 1, #orderedLayerInfo do
+        orderedLayerInfo[i] = nil
+      end
+
+      for i = layerCount + 1, #persistentLayerInfo do
+        persistentLayerInfo[i] = nil
+      end
+
+      -- Update layer summary info
+      layers.count = layerCount
+      layers.canvas_count = canvasCount
+      layers.special_layer_count = specialLayerCount
+      layers.active = state.layers.active and state.layers.active.name or nil
+
+      -- Update special layer usage
+      local usage = result.specialLayerUsage
+      usage.compositeSwitches = state.specialLayerUsage.compositeSwitches
+      usage.effectBufferSwitches = state.specialLayerUsage.effectBufferSwitches
+      usage.effectsApplied = state.specialLayerUsage.effectsApplied
+    elseif result.layers.ordered then
+      -- Clean up layer data if not in layer render mode
+      result.layers.ordered = nil
+      result.layers.count = 0
+      result.layers.canvas_count = 0
+      result.layers.special_layer_count = 0
+      result.layers.active = nil
+      result.specialLayerUsage = nil
     end
 
-    return {
-      fitMethod = state.fitMethod,
-      renderMode = state.renderMode,
-      scalingFilter = state.scalingFilter,
-      screen_width = state.screen_width,
-      screen_height = state.screen_height,
-      viewport_width = state.viewport_width,
-      viewport_height = state.viewport_height,
-      rendered_width = state.rendered_width,
-      rendered_height = state.rendered_height,
-      scale_x = state.scale_x,
-      scale_y = state.scale_y,
-      offset_x = state.offset_x,
-      offset_y = state.offset_y,
-      global_effects_count = globalEffectsCount,
-      layers = state.renderMode == "layer" and {
-        count = #state.layers.ordered,
-        canvas_count = canvasCount,
-        special_layer_count = specialLayerCount,
-        active = state.layers.active and state.layers.active.name or nil,
-        ordered = orderedLayerInfo -- Now contains canvas info for each layer
-      } or nil,
-      -- Include special layer usage information
-      specialLayerUsage = {
-        compositeSwitches = state.specialLayerUsage.compositeSwitches,
-        effectBufferSwitches = state.specialLayerUsage.effectBufferSwitches,
-        effectsApplied = state.specialLayerUsage.effectsApplied
-      }
-    }
+    return result
   end,
 }
 
