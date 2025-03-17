@@ -31,7 +31,8 @@ local shoveProfiler = {
       blue = { 0.5, 0.5, 1, 1 },
       purple = { 0.75, 0.5, 1, 1 },
       yellow = { 1, 1, 0.5, 1 },
-      orange = { 1, 0.7, 0.3, 1 },  -- Add an orange color for layers without canvases
+      orange = { 1, 0.7, 0.3, 1 },
+      midGray = { 0.5, 0.5, 0.5, 1 },
       white = { 1, 1, 1, 1 },
     },
     -- Panel settings
@@ -412,7 +413,7 @@ local function renderLayerInfo(renderX, renderY)
       end
 
       if not layer[i].hasCanvas then
-        color = shoveProfiler.config.colors.orange -- No canvas allocated
+        color = shoveProfiler.config.colors.midGray -- No canvas allocated
       end
 
       if color ~= old_color then
@@ -450,7 +451,7 @@ function shoveProfiler.renderOverlay()
   love.graphics.setColor(0, 0, 0, 0.75)
   love.graphics.rectangle("fill", area.x, area.y, panel.width, panel.height)
   -- Panel Border
-  love.graphics.setColor(0.5, 0.5, 0.5, 1)
+  love.graphics.setColor(shoveProfiler.config.colors.midGray)
   love.graphics.rectangle("line", area.x, area.y, panel.width, panel.height)
 
   -- Render sections
