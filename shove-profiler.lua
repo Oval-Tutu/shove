@@ -112,7 +112,7 @@ local function updatePanelDimensions()
 
   -- Add layer info height if using layer rendering
   if shoveProfiler.metrics.state and shoveProfiler.metrics.state.renderMode == "layer" then
-    local layerCount = shoveProfiler.metrics.state.layers and shoveProfiler.metrics.state.layers.count or 0
+    local layerCount = shoveProfiler.metrics.state.layers and (shoveProfiler.metrics.state.layers.count - shoveProfiler.metrics.state.layers.special_layer_count) or 0
     contentHeight = contentHeight + (#cachedLayerInfo + layerCount) * shoveProfiler.config.lineHeight
     contentHeight = contentHeight + shoveProfiler.config.panel.padding * 2
   end
@@ -387,7 +387,7 @@ local function renderLayerInfo(renderX, renderY)
   local layerText = ""
 
   for i=1, #layer do
-    if layer[i] and layer[i].name and layer[i].name ~= "_composite" and layer[i].name ~= "_tmp" then
+    if layer[i] and layer[i].name and not layer[i].isSpecial then
       -- Include effects count in display if there are any
       local effectsInfo = layer[i].effects > 0 and " [" .. layer[i].effects .. " fx]" or ""
 

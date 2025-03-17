@@ -1612,15 +1612,21 @@ local shove = {
   getState = function()
     -- Create an ordered array of layers with basic info for profiler
     local orderedLayerInfo = {}
+    local specialLayerCount = 0
     if state.renderMode == "layer" and #state.layers.ordered > 0 then
       for _, layer in ipairs(state.layers.ordered) do
+        -- Count special layers
+        if layer.isSpecial then
+          specialLayerCount = specialLayerCount + 1
+        end
         table.insert(orderedLayerInfo, {
           name = layer.name,
           zIndex = layer.zIndex,
           visible = layer.visible,
           blendMode = layer.blendMode,
           blendAlphaMode = layer.blendAlphaMode,
-          hasCanvas = layer.canvas ~= nil, -- Add canvas existence info
+          hasCanvas = layer.canvas ~= nil,
+          isSpecial = layer.isSpecial,
           effects = #layer.effects
         })
       end
@@ -1642,6 +1648,7 @@ local shove = {
       offset_y = state.offset_y,
       layers = state.renderMode == "layer" and {
         count = #state.layers.ordered,
+        special_layer_count = specialLayerCount,
         active = state.layers.active and state.layers.active.name or nil,
         ordered = orderedLayerInfo -- Now contains canvas info for each layer
       } or nil,
