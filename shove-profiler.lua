@@ -289,10 +289,17 @@ local function setupMetricsCollector()
         end
       end
 
+      -- Add special layer usage information
+      local specialUsage = state.specialLayerUsage or {}
+
       cachedLayerInfo = {
         string.format("Layers: %d (%d with canvas)",
           state.layers.count or 0,
           canvasCount),
+        string.format("Special: %d comp, %d temp, %d fx",
+          specialUsage.compositeSwitches or 0,
+          specialUsage.tempSwitches or 0,
+          specialUsage.effectsApplied or 0)
       }
     end
     updatePanelDimensions()
@@ -379,7 +386,7 @@ local function renderLayerInfo(renderX, renderY)
   for i=1, #layer do
     if layer[i] and layer[i].name and layer[i].name ~= "_composite" and layer[i].name ~= "_tmp" then
       -- Include effects count in display if there are any
-      local effectsInfo = layer[i].effects > 0 and " [E:" .. layer[i].effects .. "]" or ""
+      local effectsInfo = layer[i].effects > 0 and " [" .. layer[i].effects .. " fx]" or ""
 
       layerText = string.format(
         "%d: %s (%s/%s)%s",

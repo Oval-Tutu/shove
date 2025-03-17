@@ -16,6 +16,7 @@
 ---@field maskShader love.Shader Shader used for layer masking
 ---@field resizeCallback function Callback function for window resize
 ---@field inDrawMode boolean Whether we're currently in drawing mode
+---@field specialLayerUsage table Tracking for special layer usage
 -- Internal state variables
 local state = {
   -- Settings
@@ -44,6 +45,12 @@ local state = {
   -- Shader for masking
   maskShader = nil,
   resizeCallback = nil,
+  -- Tracking for special layer usage during frame rendering
+  specialLayerUsage = {
+    compositeSwitches = 0,  -- How many times the composite layer was used
+    tempSwitches = 0,       -- How many times the temp layer was used
+    effectsApplied = 0      -- How many effect applications occurred
+  }
 }
 
 ---@class ShoveLayerSystem
@@ -242,6 +249,8 @@ local function applyEffects(canvas, effects)
   if #effects == 1 then
     love.graphics.setShader(effects[1])
     love.graphics.draw(canvas)
+    -- Track effects application
+    state.specialLayerUsage.effectsApplied = state.specialLayerUsage.effectsApplied + 1
   else
     local _canvas = love.graphics.getCanvas()
 
@@ -254,6 +263,9 @@ local function applyEffects(canvas, effects)
     -- Ensure the temporary canvas exists
     ensureLayerCanvas(tmpLayer)
     local tmpCanvas = tmpLayer.canvas
+
+    -- Track temp layer switch
+    state.specialLayerUsage.tempSwitches = state.specialLayerUsage.tempSwitches + 1
 
     local outputCanvas
     local inputCanvas
@@ -268,6 +280,9 @@ local function applyEffects(canvas, effects)
       love.graphics.setShader(effects[i])
       love.graphics.draw(inputCanvas)
       love.graphics.setCanvas(inputCanvas)
+
+      -- Track effects application
+      state.specialLayerUsage.effectsApplied = state.specialLayerUsage.effectsApplied + 1
     end
     love.graphics.pop()
     love.graphics.setCanvas(_canvas)
@@ -388,34 +403,37 @@ local function compositeLayersOnScreen(globalEffects, applyPersistentEffects)
             -- Clear stencil buffer first
             love.graphics.clear(false, false, true)
             love.graphics.stencil(function()
-              -- Use mask shader to properly handle transparent pixels
-              love.graphics.setShader(state.maskShader)
-              love.graphics.draw(maskLayer.canvas)
-              love.graphics.setShader()
-            end, "replace", 1)
-            -- Only draw where stencil value equals 1
-            love.graphics.setStencilTest("equal", 1)
-          end
+            -- Use mask shader to properly handle transparent pixels
+            love.graphics.setShader(state.maskShader)
+            love.graphics.draw(maskLayer.canvas)
+            love.graphics.setShader()
+          end, "replace", 1)
+          -- Only draw where stencil value equals 1
+          love.graphics.setStencilTest("equal", 1)
         end
+      end
 
-        -- Use premultiplied alpha when drawing canvases
-        -- But respect the layer's blend mode
-        love.graphics.setBlendMode(layer.blendMode, "premultiplied")
+      -- Use premultiplied alpha when drawing canvases
+      -- But respect the layer's blend mode
+      love.graphics.setBlendMode(layer.blendMode, "premultiplied")
 
-        -- Apply layer effects or draw directly
-        if #layer.effects > 0 then
-          applyEffects(layer.canvas, layer.effects)
-        else
-          love.graphics.draw(layer.canvas)
-        end
+      -- Apply layer effects or draw directly
+      if #layer.effects > 0 then
+        applyEffects(layer.canvas, layer.effects)
+      else
+        love.graphics.draw(layer.canvas)
+      end
 
-        -- Reset stencil if used
-        if layer.maskLayer then
-          love.graphics.setStencilTest()
+      -- Reset stencil if used
+      if layer.maskLayer then
+        love.graphics.setStencilTest()
         end
       end
     end
   end
+
+  -- Track composite layer usage
+  state.specialLayerUsage.compositeSwitches = state.specialLayerUsage.compositeSwitches + 1
 
   -- Reset canvas for screen drawing
   love.graphics.setCanvas()
@@ -701,6 +719,11 @@ local shove = {
       error("shove.beginDraw: Already in drawing mode. Call endDraw() before calling beginDraw() again.", 2)
       return false
     end
+
+    -- Reset special layer usage counters at the start of each frame
+    state.specialLayerUsage.compositeSwitches = 0
+    state.specialLayerUsage.tempSwitches = 0
+    state.specialLayerUsage.effectsApplied = 0
 
     -- Set flag to indicate we're in drawing mode
     state.inDrawMode = true
@@ -1621,7 +1644,13 @@ local shove = {
         count = #state.layers.ordered,
         active = state.layers.active and state.layers.active.name or nil,
         ordered = orderedLayerInfo -- Now contains canvas info for each layer
-      } or nil
+      } or nil,
+      -- Include special layer usage information
+      specialLayerUsage = {
+        compositeSwitches = state.specialLayerUsage.compositeSwitches,
+        tempSwitches = state.specialLayerUsage.tempSwitches,
+        effectsApplied = state.specialLayerUsage.effectsApplied
+      }
     }
   end,
 }
