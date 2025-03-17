@@ -1368,9 +1368,17 @@ local shove = {
       createCompositeLayer()
     end
 
-    -- If any global effects are added, we need to ensure there's at least one layer with a canvas
-    -- This is for cases where games use global effects but don't explicitly use layers
-    if state.renderMode == "layer" and state.layers.byName["default"] then
+    -- Check if any visible layer already has a canvas
+    local hasLayerWithCanvas = false
+    for _, layer in ipairs(state.layers.ordered) do
+      if not layer.isSpecial and layer.visible and layer.canvas then
+        hasLayerWithCanvas = true
+        break
+      end
+    end
+
+    -- Only create the default canvas if no other layer has a canvas
+    if not hasLayerWithCanvas and state.renderMode == "layer" and state.layers.byName["default"] then
       -- Force canvas creation for default layer if global effects are being used
       -- This ensures we'll have something to apply the effects to
       ensureLayerCanvas(state.layers.byName["default"])
