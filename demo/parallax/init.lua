@@ -8,6 +8,11 @@ return function()
     speed = 0.15
   }
 
+  -- Shader configuration
+  local shaders = {
+    bloom = nil  -- Bloom shader for layer_06
+  }
+
   -- Sparkle particle system
   local particles = {
     systems = {},       -- Multiple particle systems for varied effects
@@ -54,7 +59,7 @@ return function()
     -- Create first particle system - floating upward sparkles
     local system1 = love.graphics.newParticleSystem(particles.texture, particles.count)
     system1:setParticleLifetime(1, 3)
-    system1:setEmissionRate(30)
+    system1:setEmissionRate(56)
     system1:setSizeVariation(1)
     system1:setLinearAcceleration(-5, -10, 5, -30)
     system1:setColors(
@@ -73,7 +78,7 @@ return function()
     -- Create second particle system - horizontal swirling sparkles
     local system2 = love.graphics.newParticleSystem(particles.texture, particles.count)
     system2:setParticleLifetime(2, 5)
-    system2:setEmissionRate(20)
+    system2:setEmissionRate(48)
     system2:setSizeVariation(0.8)
     -- Create circular motion
     system2:setTangentialAcceleration(20, 50)
@@ -94,7 +99,7 @@ return function()
     -- Create third particle system - random dancing sparkles
     local system3 = love.graphics.newParticleSystem(particles.texture, particles.count)
     system3:setParticleLifetime(1, 4)
-    system3:setEmissionRate(15)
+    system3:setEmissionRate(24)
     system3:setSizeVariation(0.9)
     -- Random directions with slight upward bias
     system3:setLinearDamping(0.5, 1)
@@ -155,6 +160,9 @@ return function()
     -- Initialize particle systems with different behaviors
     initParticleSystems()
 
+    -- Load the bloom shader for layer_06
+    shaders.bloom = love.graphics.newShader("parallax/bloom.glsl")
+
     -- Calculate scaling factors for each layer
     for i, layer in ipairs(layerImages) do
       local imgWidth, imgHeight = layer.img:getDimensions()
@@ -181,6 +189,9 @@ return function()
 
     -- Create background layer
     shove.createLayer("background", {zIndex = 5})
+
+    -- Apply the bloom shader to layer_06
+    shove.addEffect("layer_06", shaders.bloom)
   end
 
   function love.update(dt)
@@ -189,6 +200,18 @@ return function()
 
     -- Smooth sine wave scrolling animation
     parallax.currentX = math.sin(parallax.time * parallax.speed) * parallax.scrollAmplitude
+
+      -- Update shader parameters
+      if shaders.bloom then
+        -- Send time for animation
+        shaders.bloom:send("time", parallax.time)
+
+        -- Use a moderate intensity value for a balanced effect
+        shaders.bloom:send("intensity", 0.75)
+      else
+        -- Debug if shader doesn't exist
+        print("WARNING: Bloom shader is nil!")
+      end
 
     -- Update all particle systems
     for i, system in ipairs(particles.systems) do
@@ -235,7 +258,6 @@ return function()
       for i, layer in ipairs(parallax.layers) do
         shove.beginLayer(layer.name)
           -- Calculate parallax offset based on depth
-          -- Allow sub-pixel movement for smoother animation
           local offsetX = parallax.currentX * layer.depth
 
           -- Get viewport dimensions
@@ -251,17 +273,15 @@ return function()
 
           -- Calculate how many copies we need to cover viewport width plus scrolling range
           local totalWidthNeeded = viewportWidth + parallax.scrollAmplitude * 2 * layer.depth
-          local copiesNeeded = math.ceil(totalWidthNeeded / imgWidth) + 1 -- Add one extra for safety
+          local copiesNeeded = math.ceil(totalWidthNeeded / imgWidth)
 
           -- Calculate starting X position to ensure smooth wrapping
-          -- Use modulo to create repeating pattern with sub-pixel precision
+          -- Use modulo to create repeating pattern
           local baseX = offsetX % imgWidth
 
           -- Draw repeated copies of the image horizontally
           for j = 0, copiesNeeded do
-            -- Allow sub-pixel positioning for smoother motion
             local drawX = baseX - imgWidth + (j * imgWidth)
-
             love.graphics.draw(
               layer.img,
               drawX,
