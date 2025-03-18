@@ -47,6 +47,7 @@ local shoveProfiler = {
   -- State for overlay visibility and tracking
   state = {
     isOverlayVisible = false,
+    isFpsOverlayVisible = false, -- NEW: track minimal FPS overlay
     isVsyncEnabled = love.window.getVSync(),
     lastCollectionTime = 0,
     lastEventPushTime = 0,
@@ -72,6 +73,9 @@ local shoveProfiler = {
       overlayArea = {x=0, y=0, width=0, height=0},
       lastBorderTapTime = 0,
       lastBorderTapPosition = {x=0, y=0},
+      cornerTaps = 0,
+      lastCornerTapTime = 0,
+      tripleTapThreshold = 0.5,
     }
   }
 }
@@ -472,54 +476,124 @@ end
 --- Display performance metrics and profiling information
 ---@return nil
 function shoveProfiler.renderOverlay()
-  if not shoveProfiler.state.isOverlayVisible then return end
+  -- First, render the full overlay if it's visible
+  if shoveProfiler.state.isOverlayVisible then
+    -- Save current graphics state
+    local r, g, b, a = love.graphics.getColor()
+    local font = love.graphics.getFont()
+    local blendMode, blendAlphaMode = love.graphics.getBlendMode()
 
-  -- Save current graphics state
-  local r, g, b, a = love.graphics.getColor()
-  local font = love.graphics.getFont()
-  local blendMode, blendAlphaMode = love.graphics.getBlendMode()
+    love.graphics.setFont(shoveProfiler.config.font)
 
-  love.graphics.setFont(shoveProfiler.config.font)
+    -- Get panel dimensions from config
+    local panel = shoveProfiler.config.panel
+    local area = shoveProfiler.input.touch.overlayArea
+    local renderX = area.x + panel.padding
+    local renderY = area.y + panel.padding
 
-  -- Get panel dimensions from config
-  local panel = shoveProfiler.config.panel
-  local area = shoveProfiler.input.touch.overlayArea
-  local renderX = area.x + panel.padding
-  local renderY = area.y + panel.padding
+    -- Panel background
+    love.graphics.setColor(0, 0, 0, 0.75)
+    love.graphics.rectangle("fill", area.x, area.y, panel.width, panel.height)
+    -- Panel Border
+    love.graphics.setColor(shoveProfiler.config.colors.midGray)
+    love.graphics.rectangle("line", area.x, area.y, panel.width, panel.height)
 
-  -- Panel background
-  love.graphics.setColor(0, 0, 0, 0.75)
-  love.graphics.rectangle("fill", area.x, area.y, panel.width, panel.height)
-  -- Panel Border
-  love.graphics.setColor(shoveProfiler.config.colors.midGray)
-  love.graphics.rectangle("line", area.x, area.y, panel.width, panel.height)
+    -- Render sections
+    renderY = renderInfoSection(cachedHardwareInfo, renderX, renderY, shoveProfiler.config.colors.blue)
+    renderY = renderInfoSection(cachedPerformanceInfo, renderX, renderY, shoveProfiler.config.colors.blue)
+    renderY = renderInfoSection(cachedShoveInfo, renderX, renderY, shoveProfiler.config.colors.purple)
+    renderY = renderLayerInfo(renderX, renderY)
 
-  -- Render sections
-  renderY = renderInfoSection(cachedHardwareInfo, renderX, renderY, shoveProfiler.config.colors.blue)
-  renderY = renderInfoSection(cachedPerformanceInfo, renderX, renderY, shoveProfiler.config.colors.blue)
-  renderY = renderInfoSection(cachedShoveInfo, renderX, renderY, shoveProfiler.config.colors.purple)
-  renderY = renderLayerInfo(renderX, renderY)
+    -- Restore graphics state
+    love.graphics.setColor(r, g, b, a)
+    love.graphics.setFont(font)
+    love.graphics.setBlendMode(blendMode, blendAlphaMode)
+  end
 
-  -- Restore graphics state
-  love.graphics.setColor(r, g, b, a)
-  love.graphics.setFont(font)
-  love.graphics.setBlendMode(blendMode, blendAlphaMode)
+  -- Render minimal FPS overlay if enabled
+  if shoveProfiler.state.isFpsOverlayVisible then
+    -- Save current graphics state
+    local r, g, b, a = love.graphics.getColor()
+    local font = love.graphics.getFont()
+    local blendMode, blendAlphaMode = love.graphics.getBlendMode()
+
+    -- Use the larger font
+    love.graphics.setFont(shoveProfiler.config.fonts["large"])
+
+    -- Calculate frame time
+    local frameTime = love.timer.getDelta() * 1000
+
+    -- Format FPS text
+    local fpsText = string.format("FPS: %.0f (%.1f ms)",
+                                  shoveProfiler.metrics.fps or 0,
+                                  frameTime)
+
+    -- Position in top-right corner with some padding
+    local textWidth = shoveProfiler.config.fonts["large"]:getWidth(fpsText)
+    local x = love.graphics.getWidth() - textWidth - 10
+    local y = 10
+
+    -- Draw text with border for visibility
+    -- Border (draw text in black, offset in all directions)
+    love.graphics.setColor(0, 0, 0, 1)
+    for dx=-1,1 do
+      for dy=-1,1 do
+        if dx ~= 0 or dy ~= 0 then  -- Skip center position
+          love.graphics.print(fpsText, x+dx, y+dy)
+        end
+      end
+    end
+
+    -- Actual text in vivid color
+    love.graphics.setColor(0.2, 1, 0.2, 1)  -- Bright green
+    love.graphics.print(fpsText, x, y)
+
+    -- Restore graphics state
+    love.graphics.setColor(r, g, b, a)
+    love.graphics.setFont(font)
+    love.graphics.setBlendMode(blendMode, blendAlphaMode)
+  end
 
   -- Time-based throttle synchronized with collection interval
-  local currentTime = love.timer.getTime()
-  -- Push at half the rate (twice the interval)
-  local pushInterval = shoveProfiler.config.collectionInterval * 2
-  if currentTime - shoveProfiler.state.lastEventPushTime >= pushInterval then
-    love.event.push("shove_collect_metrics")
-    shoveProfiler.state.lastEventPushTime = currentTime
+  if shoveProfiler.state.isOverlayVisible or shoveProfiler.state.isFpsOverlayVisible then
+    local currentTime = love.timer.getTime()
+    -- Push at half the rate (twice the interval)
+    local pushInterval = shoveProfiler.config.collectionInterval * 2
+    if currentTime - shoveProfiler.state.lastEventPushTime >= pushInterval then
+      love.event.push("shove_collect_metrics")
+      shoveProfiler.state.lastEventPushTime = currentTime
+    end
   end
 end
 
 --- Toggle the visibility of the profiler overlay
 ---@return nil
 local function toggleOverlay()
+  -- If FPS overlay is visible, hide it first
+  if shoveProfiler.state.isFpsOverlayVisible then
+    shoveProfiler.state.isFpsOverlayVisible = false
+  end
+
+  -- Toggle main overlay
   shoveProfiler.state.isOverlayVisible = not shoveProfiler.state.isOverlayVisible
   if shoveProfiler.state.isOverlayVisible then
+    shoveProfiler.state.lastCollectionTime = 0
+    love.event.push("shove_collect_metrics")
+  end
+end
+
+--- Toggle the visibility of the minimal FPS overlay
+---@return nil
+local function toggleFpsOverlay()
+  -- If main overlay is visible, hide it first
+  if shoveProfiler.state.isOverlayVisible then
+    shoveProfiler.state.isOverlayVisible = false
+  end
+
+  -- Toggle FPS overlay
+  shoveProfiler.state.isFpsOverlayVisible = not shoveProfiler.state.isFpsOverlayVisible
+  if shoveProfiler.state.isFpsOverlayVisible then
+    -- Ensure metrics are collected for display
     shoveProfiler.state.lastCollectionTime = 0
     love.event.push("shove_collect_metrics")
   end
@@ -528,7 +602,9 @@ end
 --- Toggle VSync on/off
 ---@return nil
 local function toggleVSync()
-  if not shoveProfiler.state.isOverlayVisible then return end
+  if not (shoveProfiler.state.isOverlayVisible or shoveProfiler.state.isFpsOverlayVisible) then
+    return
+  end
 
   shoveProfiler.state.isVsyncEnabled = not shoveProfiler.state.isVsyncEnabled
   love.window.setVSync(shoveProfiler.state.isVsyncEnabled)
@@ -629,10 +705,15 @@ function shoveProfiler.gamepadpressed(joystick, button)
      (button == "y" and joystick:isGamepadDown("back")) then
     toggleSizePreset()
   end
-  -- Toggle batching with Select + X/Square
+  -- Toggle batching with Select + X/Square when overlay is visible
+  -- Toggle FPS overlay with Select + X/Square when overlay is not visible
   if (button == "back" and joystick:isGamepadDown("x")) or
      (button == "x" and joystick:isGamepadDown("back")) then
-    toggleBatching()
+    if shoveProfiler.state.isOverlayVisible then
+      toggleBatching()
+    else
+      toggleFpsOverlay()
+    end
   end
 end
 
@@ -649,6 +730,12 @@ function shoveProfiler.keypressed(key)
       love.keyboard.isDown("lgui") or love.keyboard.isDown("rgui")) and
      key == "p" then
     toggleOverlay()
+  end
+  -- Toggle FPS overlay with Ctrl+t or Cmd+t
+  if (love.keyboard.isDown("lctrl") or love.keyboard.isDown("rctrl") or
+      love.keyboard.isDown("lgui") or love.keyboard.isDown("rgui")) and
+     key == "t" then
+    toggleFpsOverlay()
   end
   -- Toggle VSync with Ctrl+V or Cmd+V
   if (love.keyboard.isDown("lctrl") or love.keyboard.isDown("rctrl") or
@@ -711,7 +798,23 @@ function shoveProfiler.touchpressed(id, x, y)
       shoveProfiler.input.touch.lastTapTime = currentTime
     end
   elseif isTouchInCorner(x, y) then
-    -- Toggle overlay with double-tap in corner
+    -- Check for triple tap to toggle FPS overlay
+    if currentTime - shoveProfiler.input.touch.lastCornerTapTime <= shoveProfiler.input.touch.tripleTapThreshold then
+      shoveProfiler.input.touch.cornerTaps = shoveProfiler.input.touch.cornerTaps + 1
+      if shoveProfiler.input.touch.cornerTaps >= 3 then
+        toggleFpsOverlay()
+        shoveProfiler.input.touch.cornerTaps = 0
+        shoveProfiler.input.touch.lastCornerTapTime = 0
+      else
+        shoveProfiler.input.touch.lastCornerTapTime = currentTime
+      end
+    else
+      -- Reset corner tap counter for new sequence
+      shoveProfiler.input.touch.cornerTaps = 1
+      shoveProfiler.input.touch.lastCornerTapTime = currentTime
+    end
+
+    -- Toggle overlay with double-tap in corner (separate from triple tap)
     if timeSinceLastTap <= shoveProfiler.input.touch.doubleTapThreshold then
       toggleOverlay()
       shoveProfiler.input.touch.lastTapTime = 0
