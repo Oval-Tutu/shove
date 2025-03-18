@@ -1932,7 +1932,7 @@ local shove = {
       local layerCount = #orderedLayers
 
       -- Track counts in a single pass
-      local canvasCount, specialLayerCount = 0, 0
+      local canvasCount, maskCount, specialLayerCount = 0, 0, 0
 
       -- Prepare ordered array if needed
       layers.ordered = layers.ordered or {}
@@ -1944,6 +1944,7 @@ local shove = {
 
         -- Count special counters
         if layer.canvas ~= nil then canvasCount = canvasCount + 1 end
+        if layer.isUsedAsMask then maskCount = maskCount + 1 end
         if layer.isSpecial then specialLayerCount = specialLayerCount + 1 end
 
         -- Reuse existing table or create new one
@@ -1978,6 +1979,7 @@ local shove = {
       -- Update layer summary info
       layers.count = layerCount
       layers.canvas_count = canvasCount
+      layers.mask_count = maskCount
       layers.special_layer_count = specialLayerCount
       layers.active = state.layers.active and state.layers.active.name or nil
 
@@ -1995,6 +1997,7 @@ local shove = {
       result.layers.ordered = nil
       result.layers.count = 0
       result.layers.canvas_count = 0
+      result.layers.mask_count = 0
       result.layers.special_layer_count = 0
       result.layers.active = nil
       result.specialLayerUsage = nil
