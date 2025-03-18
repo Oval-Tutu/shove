@@ -336,8 +336,16 @@ local function groupLayersByProperties(layers)
           blendMode = layer.blendMode,
           hasMask = layer.maskLayer ~= nil,
           effects = layer.effects,
-          effectsCount = #layer.effects
+          effectsCount = #layer.effects,
+          -- Track minimum z-index for each group
+          minZIndex = layer.zIndex
         }
+      else
+        -- Maintain the minimum z-index of all layers in this group
+        persistentGroups[signature].minZIndex = math.min(
+          persistentGroups[signature].minZIndex,
+          layer.zIndex
+        )
       end
 
       table.insert(persistentGroups[signature].layers, layer)
@@ -466,6 +474,23 @@ local function endLayerDraw()
   return false
 end
 
+-- Helper function to convert layer groups hash to sorted array
+local function getSortedLayerGroups(groupsHash)
+  local groupsArray = {}
+
+  -- Convert hash to array
+  for _, group in pairs(groupsHash) do
+    table.insert(groupsArray, group)
+  end
+
+  -- Sort by minZIndex to preserve z-order between groups
+  table.sort(groupsArray, function(a, b)
+    return a.minZIndex < b.minZIndex
+  end)
+
+  return groupsArray
+end
+
 -- Temporary canvas for batched effect processing
 local batchCanvas = nil
 
@@ -544,8 +569,12 @@ local function drawLayerBatch(layerGroup)
     state.specialLayerUsage.batchGroups = state.specialLayerUsage.batchGroups + 1
     state.specialLayerUsage.batchedLayers = state.specialLayerUsage.batchedLayers + layerCount
   else
-    -- For layers without masks and effects, draw them all at once
+    -- For layers without masks and effects, draw them individually in z-index order
+    -- This preserves proper z-ordering within the batch
     for _, layer in ipairs(layerGroup.layers) do
+      -- Set the blend mode for each layer, just to be safe
+      love.graphics.setBlendMode(layer.blendMode, "premultiplied")
+      -- Draw the layer
       love.graphics.draw(layer.canvas)
     end
 
@@ -607,12 +636,54 @@ local function compositeLayersOnScreen(globalEffects, applyPersistentEffects)
   love.graphics.clear()
 
   if state.enableBatching then
-    -- Group layers by properties for batch processing
-    local layerGroups = groupLayersByProperties(orderedLayers)
+    -- Group layers, but process them in strict z-index order
+    -- First, create a temporary table of all visible, non-mask layers with canvases
+    local visibleLayers = {}
+    for _, layer in ipairs(orderedLayers) do
+      if layer.visible and not layer.isSpecial and not layer.isUsedAsMask and layer.canvas then
+        table.insert(visibleLayers, layer)
+      end
+    end
 
-    -- Process each group of layers
-    for _, group in pairs(layerGroups) do
-      drawLayerBatch(group)
+    -- Sort by z-index to ensure predictable drawing order
+    table.sort(visibleLayers, function(a, b)
+      return a.zIndex < b.zIndex
+    end)
+
+    -- Process each layer individually, but use the signature for batching
+    local lastSignature = ""
+    local currentBatch = nil
+
+    for _, layer in ipairs(visibleLayers) do
+      local signature = getLayerSignature(layer)
+
+      -- Different signature means we need to start a new batch
+      if signature ~= lastSignature then
+        -- Process previous batch if it exists
+        if currentBatch and #currentBatch.layers > 0 then
+          drawLayerBatch(currentBatch)
+        end
+
+        -- Start a new batch
+        currentBatch = {
+          signature = signature,
+          layers = {},
+          blendMode = layer.blendMode,
+          hasMask = layer.maskLayer ~= nil,
+          effects = layer.effects,
+          effectsCount = #layer.effects,
+          minZIndex = layer.zIndex
+        }
+        lastSignature = signature
+      end
+
+      -- Add layer to current batch
+      table.insert(currentBatch.layers, layer)
+    end
+
+    -- Process final batch if it exists
+    if currentBatch and #currentBatch.layers > 0 then
+      drawLayerBatch(currentBatch)
     end
   else
     -- Traditional layer-by-layer processing
