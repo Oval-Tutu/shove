@@ -47,7 +47,7 @@ local shoveProfiler = {
   -- State for overlay visibility and tracking
   state = {
     isOverlayVisible = false,
-    isFpsOverlayVisible = false, -- NEW: track minimal FPS overlay
+    isFpsOverlayVisible = false,
     isVsyncEnabled = love.window.getVSync(),
     lastCollectionTime = 0,
     lastEventPushTime = 0,
@@ -285,7 +285,6 @@ local function setupMetricsCollector()
     cachedShoveInfo = {
       string.format("Shöve %s", (shove and shove._VERSION and shove._VERSION.string) or "Unknown"),
       string.format("Mode: %s  /  %s  /  %s", state.renderMode or "?", state.fitMethod or "?", state.scalingFilter or "?"),
-      string.format("Batching: %s", batchingEnabled),
       string.format("Window: %d x %d", state.screen_width or 0, state.screen_height or 0),
       string.format("Viewport: %d x %d", state.viewport_width or 0, state.viewport_height or 0),
       string.format("Rendered: %d x %d", state.rendered_width or 0, state.rendered_height or 0),
@@ -309,11 +308,18 @@ local function setupMetricsCollector()
       local specialUsage = state.specialLayerUsage or {}
 
       cachedLayerInfo = {
-        string.format("Layers: %d (%d active)",
-          layerCount,
-          canvasCount),
-        string.format("Composites: %d", specialUsage.compositeSwitches or 0),
+        string.format("Render: ( Batching: %s )", batchingEnabled),
+        string.format("Layers: %d (%d active)", layerCount, canvasCount)
       }
+
+      -- Add batching metrics if any batching occurred
+      if (specialUsage.batchGroups or 0) > 0 then
+        table.insert(cachedLayerInfo,
+          string.format("Batches: %d (%d layers)",
+            specialUsage.batchGroups,
+            specialUsage.batchedLayers or 0)
+        )
+      end
 
       -- Only add Effects line if any effects were applied
       if (specialUsage.effectsApplied or 0) > 0 then
@@ -322,15 +328,6 @@ local function setupMetricsCollector()
           specialUsage.effectsApplied,
           specialUsage.effectBufferSwitches or 0,
           (specialUsage.effectBufferSwitches or 0) == 1 and "switch" or "switches")
-        )
-      end
-
-      -- Add batching metrics if any batching occurred
-      if (specialUsage.batchGroups or 0) > 0 then
-        table.insert(cachedLayerInfo,
-          string.format("Batches: %d (%d layers)",
-            specialUsage.batchGroups,
-            specialUsage.batchedLayers or 0)
         )
       end
 
@@ -349,6 +346,9 @@ local function setupMetricsCollector()
             specialUsage.stateChanges)
         )
       end
+
+      table.insert(cachedLayerInfo, string.format("Composites: %d", specialUsage.compositeSwitches or 0))
+
     end
     updatePanelDimensions()
   end
@@ -476,13 +476,13 @@ end
 --- Display performance metrics and profiling information
 ---@return nil
 function shoveProfiler.renderOverlay()
+  -- Save current graphics state
+  local r, g, b, a = love.graphics.getColor()
+  local font = love.graphics.getFont()
+  local blendMode, blendAlphaMode = love.graphics.getBlendMode()
+
   -- First, render the full overlay if it's visible
   if shoveProfiler.state.isOverlayVisible then
-    -- Save current graphics state
-    local r, g, b, a = love.graphics.getColor()
-    local font = love.graphics.getFont()
-    local blendMode, blendAlphaMode = love.graphics.getBlendMode()
-
     love.graphics.setFont(shoveProfiler.config.font)
 
     -- Get panel dimensions from config
@@ -503,27 +503,10 @@ function shoveProfiler.renderOverlay()
     renderY = renderInfoSection(cachedPerformanceInfo, renderX, renderY, shoveProfiler.config.colors.blue)
     renderY = renderInfoSection(cachedShoveInfo, renderX, renderY, shoveProfiler.config.colors.purple)
     renderY = renderLayerInfo(renderX, renderY)
-
-    -- Restore graphics state
-    love.graphics.setColor(r, g, b, a)
-    love.graphics.setFont(font)
-    love.graphics.setBlendMode(blendMode, blendAlphaMode)
-  end
-
-  -- Render minimal FPS overlay if enabled
-  if shoveProfiler.state.isFpsOverlayVisible then
-    -- Save current graphics state
-    local r, g, b, a = love.graphics.getColor()
-    local font = love.graphics.getFont()
-    local blendMode, blendAlphaMode = love.graphics.getBlendMode()
-
-    -- Use the larger font
+  elseif shoveProfiler.state.isFpsOverlayVisible then
+    -- Render minimal FPS overlay if enabled
     love.graphics.setFont(shoveProfiler.config.fonts["large"])
-
-    -- Calculate frame time
     local frameTime = love.timer.getDelta() * 1000
-
-    -- Format FPS text
     local fpsText = string.format("FPS: %.0f (%.1f ms)",
                                   shoveProfiler.metrics.fps or 0,
                                   frameTime)
@@ -533,26 +516,13 @@ function shoveProfiler.renderOverlay()
     local x = love.graphics.getWidth() - textWidth - 10
     local y = 10
 
-    -- Draw text with border for visibility
-    -- Border (draw text in black, offset in all directions)
-    love.graphics.setColor(0, 0, 0, 1)
-    for dx=-1,1 do
-      for dy=-1,1 do
-        if dx ~= 0 or dy ~= 0 then  -- Skip center position
-          love.graphics.print(fpsText, x+dx, y+dy)
-        end
-      end
-    end
-
-    -- Actual text in vivid color
-    love.graphics.setColor(0.2, 1, 0.2, 1)  -- Bright green
+    love.graphics.setColor(shoveProfiler.config.colors.orange)
     love.graphics.print(fpsText, x, y)
-
-    -- Restore graphics state
-    love.graphics.setColor(r, g, b, a)
-    love.graphics.setFont(font)
-    love.graphics.setBlendMode(blendMode, blendAlphaMode)
   end
+  -- Restore graphics state
+  love.graphics.setColor(r, g, b, a)
+  love.graphics.setFont(font)
+  love.graphics.setBlendMode(blendMode, blendAlphaMode)
 
   -- Time-based throttle synchronized with collection interval
   if shoveProfiler.state.isOverlayVisible or shoveProfiler.state.isFpsOverlayVisible then
