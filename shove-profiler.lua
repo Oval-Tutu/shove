@@ -285,6 +285,7 @@ local function setupMetricsCollector()
     cachedShoveInfo = {
       string.format("Shöve %s", (shove and shove._VERSION and shove._VERSION.string) or "Unknown"),
       string.format("Mode: %s  /  %s  /  %s", state.renderMode or "?", state.fitMethod or "?", state.scalingFilter or "?"),
+      string.format("Batching: %s", batchingEnabled),
       string.format("Window: %d x %d", state.screen_width or 0, state.screen_height or 0),
       string.format("Viewport: %d x %d", state.viewport_width or 0, state.viewport_height or 0),
       string.format("Rendered: %d x %d", state.rendered_width or 0, state.rendered_height or 0),
@@ -328,6 +329,14 @@ local function setupMetricsCollector()
           specialUsage.effectsApplied,
           specialUsage.effectBufferSwitches or 0,
           (specialUsage.effectBufferSwitches or 0) == 1 and "switch" or "switches")
+        )
+      end
+
+      -- Add batched effect operations if any occurred
+      if (specialUsage.batchedEffectOperations or 0) > 0 then
+        table.insert(cachedLayerInfo,
+          string.format("Batched Effects: %d operations",
+            specialUsage.batchedEffectOperations)
         )
       end
 
