@@ -11,6 +11,7 @@ local demo_data = {
   { module = "canvases-shaders" },
   { module = "stencil" },
   { module = "mask" },
+  { module = "parallax" },
 }
 
 local demos = {}
