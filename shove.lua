@@ -52,10 +52,16 @@ local state = {
     effectsApplied = 0,      -- How many effect applications occurred
     batchGroups = 0,        -- Number of batch groups processed
     batchedLayers = 0,      -- Total number of layers processed in batches
-    stateChanges = 0        -- Number of rendering state changes
+    stateChanges = 0,        -- Number of rendering state changes
+    batchedEffectOperations = 0  -- How many effect operations were batched together
   },
   -- Whether to use batch processing for similar layers
-  enableBatching = true
+  enableBatching = true,
+  -- Shader registry for effect identification
+  shaderRegistry = {
+    nextId = 1,
+    shaders = setmetatable({}, {__mode = "k"}) -- Weak keys to allow shader garbage collection
+  }
 }
 
 ---@class ShoveLayerSystem
@@ -92,6 +98,7 @@ end
 
 -- Persistent tables for reuse to minimize allocations
 local sharedEffectsTable = {}
+local effectIds = {} -- For effect signature generation
 
 --- Ensures a layer has a valid canvas
 ---@param layer ShoveLayer Layer to check
@@ -237,11 +244,35 @@ local function createCompositeLayer()
   return composite
 end
 
+--- Get a unique ID for a shader effect
+---@param effect love.Shader The shader effect
+---@return number id The unique ID for this shader
+local function getShaderID(effect)
+  if not effect then return 0 end
+
+  -- If shader is already registered, return its ID
+  if state.shaderRegistry.shaders[effect] then
+    return state.shaderRegistry.shaders[effect]
+  end
+
+  -- Otherwise, assign a new ID
+  local id = state.shaderRegistry.nextId
+  state.shaderRegistry.shaders[effect] = id
+  state.shaderRegistry.nextId = id + 1
+
+  return id
+end
+
 --- Generate a signature string for a layer based on its properties
 ---@param layer ShoveLayer Layer to generate signature for
 ---@return string signature A string representing the layer's key properties
 local function getLayerSignature(layer)
   if not layer then return "" end
+
+  -- Check if we have a cached signature that's still valid
+  if not layer._effectsHashDirty and layer._effectsHash then
+    return layer._effectsHash
+  end
 
   -- Start with blend mode
   local sig = layer.blendMode or "alpha"
@@ -249,35 +280,71 @@ local function getLayerSignature(layer)
   -- Add mask status
   sig = sig .. "|" .. (layer.maskLayer and "masked" or "unmasked")
 
-  -- Add effects signature (simple count for now)
-  sig = sig .. "|" .. (#layer.effects)
+  -- Enhanced effects signature using shader IDs
+  local count = #layer.effects
+  if count > 0 then
+    -- Clear and reuse table
+    for i = 1, #effectIds do effectIds[i] = nil end
+
+    -- Collect shader IDs
+    for i = 1, count do
+      local effect = layer.effects[i]
+      local id = getShaderID(effect)
+      effectIds[i] = id
+    end
+
+    -- Sort IDs for consistent ordering regardless of shader creation order
+    if count > 1 then
+      table.sort(effectIds)
+    end
+
+    -- Build signature string from IDs
+    sig = sig .. "|"
+    for i = 1, count do
+      sig = sig .. effectIds[i]
+      if i < count then sig = sig .. "," end
+    end
+  else
+    sig = sig .. "|0" -- No effects
+  end
+
+  -- Cache the signature
+  layer._effectsHash = sig
+  layer._effectsHashDirty = false
 
   return sig
 end
+
+-- Persistent table to avoid allocations in the hot loop
+local persistentGroups = {}
 
 --- Group layers by their rendering properties
 ---@param layers ShoveLayer[] Array of layers to group
 ---@return table groups Table of layer groups indexed by signature
 local function groupLayersByProperties(layers)
-  local groups = {}
+  -- Clear existing groups for reuse
+  for k in pairs(persistentGroups) do persistentGroups[k] = nil end
 
   for _, layer in ipairs(layers) do
     if layer.visible and not layer.isSpecial and layer.canvas then
       local signature = getLayerSignature(layer)
 
-      groups[signature] = groups[signature] or {
-        signature = signature,
-        layers = {},
-        blendMode = layer.blendMode,
-        hasMask = layer.maskLayer ~= nil,
-        effectsCount = #layer.effects
-      }
+      if not persistentGroups[signature] then
+        persistentGroups[signature] = {
+          signature = signature,
+          layers = {},
+          blendMode = layer.blendMode,
+          hasMask = layer.maskLayer ~= nil,
+          effects = layer.effects,
+          effectsCount = #layer.effects
+        }
+      end
 
-      table.insert(groups[signature].layers, layer)
+      table.insert(persistentGroups[signature].layers, layer)
     end
   end
 
-  return groups
+  return persistentGroups
 end
 
 --- Apply a set of shader effects to a canvas
@@ -399,6 +466,9 @@ local function endLayerDraw()
   return false
 end
 
+-- Temporary canvas for batched effect processing
+local batchCanvas = nil
+
 --- Draw a batch of layers with similar properties
 ---@param layerGroup table Group of layers with similar properties
 local function drawLayerBatch(layerGroup)
@@ -408,8 +478,8 @@ local function drawLayerBatch(layerGroup)
   love.graphics.setBlendMode(layerGroup.blendMode, "premultiplied")
   state.specialLayerUsage.stateChanges = state.specialLayerUsage.stateChanges + 1
 
-  -- For masked layers or layers with effects, process individually
-  if layerGroup.hasMask or layerGroup.effectsCount > 0 then
+  -- For masked layers, process individually
+  if layerGroup.hasMask then
     for _, layer in ipairs(layerGroup.layers) do
       -- Apply mask if needed
       if layer.maskLayer then
@@ -439,6 +509,40 @@ local function drawLayerBatch(layerGroup)
         state.specialLayerUsage.stateChanges = state.specialLayerUsage.stateChanges + 1
       end
     end
+  -- For layers with identical effects, batch process them
+  elseif layerGroup.effectsCount > 0 then
+    local layerCount = #layerGroup.layers
+
+    -- Create batch canvas if needed
+    if not batchCanvas or batchCanvas:getWidth() ~= state.viewport_width or batchCanvas:getHeight() ~= state.viewport_height then
+      if batchCanvas then batchCanvas:release() end
+      batchCanvas = love.graphics.newCanvas(state.viewport_width, state.viewport_height)
+    end
+
+    -- Store current canvas
+    local currentCanvas = love.graphics.getCanvas()
+
+    -- Draw all layers to batch canvas
+    love.graphics.setCanvas(batchCanvas)
+    love.graphics.clear()
+
+    for _, layer in ipairs(layerGroup.layers) do
+      love.graphics.draw(layer.canvas)
+    end
+
+    -- Restore original canvas
+    love.graphics.setCanvas(currentCanvas)
+
+    -- Apply effects once to the combined batch
+    applyEffects(batchCanvas, layerGroup.effects)
+
+    -- Count batched effect operations
+    state.specialLayerUsage.batchedEffectOperations = state.specialLayerUsage.batchedEffectOperations +
+                                                     (layerCount - 1) * layerGroup.effectsCount
+
+    -- Count as a batch
+    state.specialLayerUsage.batchGroups = state.specialLayerUsage.batchGroups + 1
+    state.specialLayerUsage.batchedLayers = state.specialLayerUsage.batchedLayers + layerCount
   else
     -- For layers without masks and effects, draw them all at once
     for _, layer in ipairs(layerGroup.layers) do
@@ -611,7 +715,14 @@ end
 ---@return boolean success Whether the effect was added
 local function addEffect(layer, effect)
   if layer and effect then
+    -- Register the shader if not already registered
+    if not state.shaderRegistry.shaders[effect] then
+      state.shaderRegistry.shaders[effect] = state.shaderRegistry.nextId
+      state.shaderRegistry.nextId = state.shaderRegistry.nextId + 1
+    end
+
     table.insert(layer.effects, effect)
+    layer._effectsHashDirty = true
     return true
   end
   return false
@@ -627,6 +738,7 @@ local function removeEffect(layer, effect)
   for i, e in ipairs(layer.effects) do
     if e == effect then
       table.remove(layer.effects, i)
+      layer._effectsHashDirty = true
       return true
     end
   end
@@ -640,6 +752,7 @@ end
 local function clearEffects(layer)
   if layer then
     layer.effects = {}
+    layer._effectsHashDirty = true
     return true
   end
   return false
@@ -852,6 +965,7 @@ local shove = {
     state.specialLayerUsage.batchGroups = 0
     state.specialLayerUsage.batchedLayers = 0
     state.specialLayerUsage.stateChanges = 0
+    state.specialLayerUsage.batchedEffectOperations = 0
 
     -- Set flag to indicate we're in drawing mode
     state.inDrawMode = true
@@ -1295,6 +1409,9 @@ local shove = {
       layer.maskLayerRef = nil
       layer.stencil = false
     end
+
+    -- Mark the layer's effect signature as dirty since mask status affects grouping
+    layer._effectsHashDirty = true
 
     return true
   end,
@@ -1866,6 +1983,7 @@ local shove = {
       usage.batchGroups = state.specialLayerUsage.batchGroups
       usage.batchedLayers = state.specialLayerUsage.batchedLayers
       usage.stateChanges = state.specialLayerUsage.stateChanges
+      usage.batchedEffectOperations = state.specialLayerUsage.batchedEffectOperations
     elseif result.layers.ordered then
       -- Clean up layer data if not in layer render mode
       result.layers.ordered = nil
