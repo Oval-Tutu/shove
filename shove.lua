@@ -572,11 +572,6 @@ local function compositeLayersOnScreen(globalEffects, applyPersistentEffects)
     return false
   end
 
-  -- Reset batch metrics
-  state.specialLayerUsage.batchGroups = 0
-  state.specialLayerUsage.batchedLayers = 0
-  state.specialLayerUsage.stateChanges = 0
-
   -- Ensure we have a composite layer
   if not state.layers.composite then
     createCompositeLayer()
