@@ -303,13 +303,14 @@ local function setupMetricsCollector()
       local special_layer_count = state.layers.special_layer_count or 0
       layerCount = layer_count - special_layer_count
       canvasCount = canvas_count - special_layer_count
+      local maskCount = state.layers.mask_count or 0
 
       -- Add special layer usage information
       local specialUsage = state.specialLayerUsage or {}
 
       cachedLayerInfo = {
         string.format("Render: ( Batching: %s )", batchingEnabled),
-        string.format("Layers: %d (%d active)", layerCount, canvasCount)
+        string.format("Layers: %d (%d active)", layerCount, canvasCount - maskCount),
       }
 
       -- Add batching metrics if any batching occurred
