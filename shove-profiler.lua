@@ -456,7 +456,8 @@ local function renderLayerInfo(renderX, renderY)
         color = shoveProfiler.config.colors.red
       elseif layer.name == state.layers.active then
         color = shoveProfiler.config.colors.green
-      elseif not layer.hasCanvas then
+      elseif not layer.hasCanvas or layer.isUsedAsMask then
+        -- Show mask layers in gray to indicate they're not composited
         color = shoveProfiler.config.colors.midGray
       end
 
