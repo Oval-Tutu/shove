@@ -271,9 +271,17 @@ local function setupMetricsCollector()
 
     -- Safely build Shöve info
     local state = shoveProfiler.metrics.state or {}
+
+    -- Get batching state if available
+    local batchingEnabled = "?"
+    if shoveProfiler.shove and shoveProfiler.shove.getLayerBatching then
+      batchingEnabled = shoveProfiler.shove.getLayerBatching() and "on" or "off"
+    end
+
     cachedShoveInfo = {
       string.format("Shöve %s", (shove and shove._VERSION and shove._VERSION.string) or "Unknown"),
       string.format("Mode: %s  /  %s  /  %s", state.renderMode or "?", state.fitMethod or "?", state.scalingFilter or "?"),
+      string.format("Batching: %s", batchingEnabled),
       string.format("Window: %d x %d", state.screen_width or 0, state.screen_height or 0),
       string.format("Viewport: %d x %d", state.viewport_width or 0, state.viewport_height or 0),
       string.format("Rendered: %d x %d", state.rendered_width or 0, state.rendered_height or 0),
@@ -319,6 +327,14 @@ local function setupMetricsCollector()
           string.format("Batches: %d (%d layers)",
             specialUsage.batchGroups,
             specialUsage.batchedLayers or 0)
+        )
+      end
+
+      -- Add batched effect operations if any occurred
+      if (specialUsage.batchedEffectOperations or 0) > 0 then
+        table.insert(cachedLayerInfo,
+          string.format("Batched Effects: %d operations",
+            specialUsage.batchedEffectOperations)
         )
       end
 
@@ -518,6 +534,19 @@ local function toggleVSync()
   love.window.setVSync(shoveProfiler.state.isVsyncEnabled)
 end
 
+--- Toggle layer batching on/off
+---@return nil
+local function toggleBatching()
+  if not shoveProfiler.state.isOverlayVisible then return end
+  if not shoveProfiler.shove or not shoveProfiler.shove.setLayerBatching then return end
+
+  local currentState = shoveProfiler.shove.getLayerBatching()
+  shoveProfiler.shove.setLayerBatching(not currentState)
+
+  -- Force metrics collection to update display
+  love.event.push("shove_collect_metrics")
+end
+
 --- Checks if a touch position is on the panel border
 ---@param x number Touch x-coordinate
 ---@param y number Touch y-coordinate
@@ -600,6 +629,11 @@ function shoveProfiler.gamepadpressed(joystick, button)
      (button == "y" and joystick:isGamepadDown("back")) then
     toggleSizePreset()
   end
+  -- Toggle batching with Select + X/Square
+  if (button == "back" and joystick:isGamepadDown("x")) or
+     (button == "x" and joystick:isGamepadDown("back")) then
+    toggleBatching()
+  end
 end
 
 --- Handle keyboard input for profiler control
@@ -627,6 +661,12 @@ function shoveProfiler.keypressed(key)
       love.keyboard.isDown("lgui") or love.keyboard.isDown("rgui")) and
      key == "s" then
     toggleSizePreset()
+  end
+  -- Toggle batching with Ctrl+B or Cmd+B
+  if (love.keyboard.isDown("lctrl") or love.keyboard.isDown("rctrl") or
+      love.keyboard.isDown("lgui") or love.keyboard.isDown("rgui")) and
+     key == "b" then
+    toggleBatching()
   end
 end
 
