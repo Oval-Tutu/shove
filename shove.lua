@@ -193,7 +193,8 @@ local function createLayer(layerName, options)
     blendAlphaMode = options.blendAlphaMode or "alphamultiply",
     maskLayer = nil,
     maskLayerRef = nil,
-    isSpecial = isSpecial
+    isSpecial = isSpecial,
+    isUsedAsMask = false
   }
 
   state.layers.byName[layerName] = layer
@@ -280,6 +281,9 @@ local function getLayerSignature(layer)
   -- Add mask status
   sig = sig .. "|" .. (layer.maskLayer and "masked" or "unmasked")
 
+  -- Add whether this layer is used as a mask (ensure these are never batched)
+  sig = sig .. "|" .. (layer.isUsedAsMask and "mask" or "nomask")
+
   -- Enhanced effects signature using shader IDs
   local count = #layer.effects
   if count > 0 then
@@ -326,7 +330,8 @@ local function groupLayersByProperties(layers)
   for k in pairs(persistentGroups) do persistentGroups[k] = nil end
 
   for _, layer in ipairs(layers) do
-    if layer.visible and not layer.isSpecial and layer.canvas then
+    -- Skip layers that are being used as masks - they shouldn't be composited
+    if layer.visible and not layer.isSpecial and not layer.isUsedAsMask and layer.canvas then
       local signature = getLayerSignature(layer)
 
       if not persistentGroups[signature] then
@@ -617,7 +622,8 @@ local function compositeLayersOnScreen(globalEffects, applyPersistentEffects)
   else
     -- Traditional layer-by-layer processing
     for _, layer in ipairs(orderedLayers) do
-      if layer.visible and not layer.isSpecial then
+      -- Skip layers that are being used as masks - they shouldn't be composited
+      if layer.visible and not layer.isSpecial and not layer.isUsedAsMask then
         -- Skip layers without canvas (never drawn to)
         if layer.canvas then  -- Only process layers that have a canvas
           -- Apply mask if needed
@@ -1389,6 +1395,11 @@ local shove = {
       return false
     end
 
+    -- Clear previous mask's isUsedAsMask flag if it exists
+    if layer.maskLayer and layer.maskLayerRef then
+      layer.maskLayerRef.isUsedAsMask = false
+    end
+
     if maskName then
       local maskLayer = getLayer(maskName)
       if not maskLayer then
@@ -1398,6 +1409,9 @@ local shove = {
       layer.maskLayer = maskName
       layer.maskLayerRef = maskLayer
       layer.stencil = true
+
+      -- Mark the mask layer as being used as a mask
+      maskLayer.isUsedAsMask = true
     else
       -- Clear mask values
       layer.maskLayer = nil
@@ -1950,6 +1964,8 @@ local shove = {
         layerInfo.hasCanvas = layer.canvas ~= nil
         layerInfo.isSpecial = layer.isSpecial
         layerInfo.effects = #layer.effects
+        -- Include mask information for profiler display
+        layerInfo.isUsedAsMask = layer.isUsedAsMask or false
 
         -- Add to result array
         orderedLayerInfo[i] = layerInfo
