@@ -275,17 +275,10 @@ local function getLayerSignature(layer)
     return layer._effectsHash
   end
 
-  -- Start with blend mode
-  local sig = layer.blendMode or "alpha"
-
-  -- Add mask status
-  sig = sig .. "|" .. (layer.maskLayer and "masked" or "unmasked")
-
-  -- Add whether this layer is used as a mask (ensure these are never batched)
-  sig = sig .. "|" .. (layer.isUsedAsMask and "mask" or "nomask")
-
   -- Enhanced effects signature using shader IDs
   local count = #layer.effects
+  local effectsPart = "0"
+
   if count > 0 then
     -- Clear and reuse table
     for i = 1, #effectIds do effectIds[i] = nil end
@@ -302,15 +295,17 @@ local function getLayerSignature(layer)
       table.sort(effectIds)
     end
 
-    -- Build signature string from IDs
-    sig = sig .. "|"
-    for i = 1, count do
-      sig = sig .. effectIds[i]
-      if i < count then sig = sig .. "," end
-    end
-  else
-    sig = sig .. "|0" -- No effects
+    -- Get effects as a string
+    effectsPart = table.concat(effectIds, ",")
   end
+
+  -- Format the complete signature in one operation with no concatenation
+  local sig = string.format("%s|%s|%s|%s",
+    layer.blendMode or "alpha",
+    layer.maskLayer and "masked" or "unmasked",
+    layer.isUsedAsMask and "mask" or "nomask",
+    effectsPart
+  )
 
   -- Cache the signature
   layer._effectsHash = sig
