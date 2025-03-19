@@ -4,26 +4,24 @@
 Shöve is a powerful, flexible resolution-handling and rendering library for the LÖVE framework.
 Using Shöve, you can develop your game at a fixed resolution while scaling to fit the window or screen - all with a simple, intuitive API.
 
-Shöve started as a fork of the popular [push](https://github.com/Ulydev/push) library, building on its solid foundation and incorporating community contributed fixes and improvements with additional features and API changes built by the team at [Oval Tutu](https://oval-tutu.com) 🩰
-
 ## Why Shöve?
 
-Shöve was takes the [`dev` branch of push](https://github.com/Ulydev/push/tree/dev) and redesigns the API and builds on its Canvas rendering concept to create a powerful and intuitive library that can handle complex rendering scenarios.
+Shöve takes the [`dev` branch of push](https://github.com/Ulydev/push/tree/dev), redesigns the API, and builds on its Canvas rendering concept to create a powerful and intuitive library that can handle complex rendering scenarios.
 
 ### Key Features
 
-Shöve offers two render modes:
+#### 🖼️ Two Powerful Render Modes
 
-- **Direct Mode**: Simple scaling and positioning, similar to the original push library
-- **Layer Mode**: Advanced rendering with support for multiple layers, effects, and compositing
+- **Direct Mode**: Simple scaling and positioning
+- **Layer Mode**: Advanced rendering with multiple layers
 
-#### Complete Resolution Management 📏
+####  📏 Complete Resolution Management
 
 - **Multiple Fit Methods**: Choose from aspect-preserving, pixel-perfect, stretch, or no scaling
 - **Dynamic Resizing**: Responds instantly to window/screen changes
 - **Coordinate Conversion**: Seamlessly map between screen and game coordinates
 
-#### Layer-Based Rendering 🥞
+#### 🥞 Layer-Based Rendering
 
 - **Layer-Based System**: Organize your rendering into logical layers
 - **Z-Order Control**: Easily change which layers appear on top
@@ -31,14 +29,14 @@ Shöve offers two render modes:
 - **Complex UIs**: Put your HUD, menus, dialogs, and tooltips on separate layers for easy management.
 - **Integrated Profiling**: Measure performance and debug rendering issues
 
-#### Effect Pipeline ✨
+#### ✨ Effect Pipeline
 
 - **Per-Layer Effects**: Apply shaders to specific layers only
 - **Global Effects**: Transform your entire game with post-processing
 - **Effect Chaining**: Combine multiple shaders for complex visual styles
 - **Smart Masking**: Use any layer as a mask for another
 
-Shöve has a clean API with with consistent naming patterns that offers a **progressive learning curve where you can start simple, add complexity as needed**. ‍🧑‍🎓
+**Shöve offers a progressive learning curve**—start simple and add complexity as needed ‍🧑‍🎓
 
 ## Quick Start
 
@@ -49,19 +47,22 @@ shove = require("shove")
 
 function love.load()
   -- Initialize Shöve with fixed game resolution and options
-  shove.setResolution(960, 540, {
-    fitMethod = "pixel", -- "pixel", "aspect", "stretch", or "none"
-    renderMode = "direct" -- "direct" or "layer"
-  })
+  shove.setResolution(400, 300, {fitMethod = "aspect")
   -- Set up a resizable window
-  shove.setWindowMode(1280, 720, {resizable = true})
+  shove.setWindowMode(800, 600, {resizable = true})
 end
 
 function love.draw()
   shove.beginDraw()
-    -- Draw your game here
-    love.graphics.rectangle("fill", 50, 50, 200, 150)
+    -- Your game here!
+    love.graphics.clear(0.1, 0.1, 0.2)
+    love.graphics.setColor(0.918, 0.059, 0.573)
+    love.graphics.rectangle("fill", 150 + math.sin(love.timer.getTime()) * 150, 100, 100, 100)
   shove.endDraw()
+end
+
+function love.keypressed(key)
+  if key == "escape" then love.event.quit() end
 end
 ```
 
@@ -69,33 +70,19 @@ You can now draw your game at a fixed resolution and have it scale to fit the wi
 
 **💡 NOTE!** That is all you need to get started! **Everything else that follows is optional**, but very tasty 👅
 
-# Demo ️🕹️
+# Demos ️🕹️
 
-The complete suite of demos can originally be found in push have been ported to Shöve and can be found in the `demo/` directory.
+Run `love demo/` to explore all demos. Use <kbd>SPACE</kbd> to cycle through examples, <kbd>f</kbd> to toggle fullscreen, and <kbd>ESC</kbd> to exit.
 
-- Run `love demo/` to view all the demos.
-- While running a demo resize the window to see how the resolution changes.
-- Press <kbd>f</kbd> to toggle fullscreen.
-- Press <kbd>SPACE</kbd> to to cycle through the demos.
-- Press <kbd>ESC</kbd> to exit the demo.
-
-## What is included in the demo?
-
-- [**low-res**](https://github.com/Oval-Tutu/shove/blob/main/demo/low-res/init.lua): Demonstrates pixel-perfect scaling with a tiny 64x64 resolution.
-  - Shows how to use layer-based rendering for a retro-style game with an animated text effect.
-  - Also includes mouse coordinate conversion to display a custom cursor.
-- [**single-shader**](https://github.com/Oval-Tutu/shove/blob/main/demo/single-shader/init.lua): Shows how to apply a shader to a specific layer.
-  - Demonstrates creating a layer, adding an effect to it, and animating shader parameters over time for dynamic visual effects.
-- [**multiple-shaders**](https://github.com/Oval-Tutu/shove/blob/main/demo/multiple-shaders/init.lua): Illustrates how to chain multiple shaders together using global effects.
-  - Shows how global effects are applied to the entire rendering output, creating complex visual transformations by combining shader effects.
-- [**mouse-input**](https://github.com/Oval-Tutu/shove/blob/main/demo/mouse-input/init.lua): Focuses on coordinate conversion between screen and viewport spaces.
-  - Demonstrates how to check if the mouse is inside the viewport and convert coordinates appropriately, essential for handling input in games with scaled resolution.
-- [**canvases-shaders**](https://github.com/Oval-Tutu/shove/blob/main/demo/canvases-shaders/init.lua): Shows advanced layering with different effects applied to different layers.
-  - Demonstrates using both layer-specific shaders and global shaders simultaneously, allowing for more complex visual compositions.
-- [**stencil**](https://github.com/Oval-Tutu/shove/blob/main/demo/stencil/init.lua): Illustrates how to use the stencil buffer with Shöve's layer system.
-  - Shows how to create complex masking effects with stencil testing, allowing you to limit rendering to specific shapes or areas.
-- [**mask**](https://github.com/Oval-Tutu/shove/blob/main/demo/mask/init.lua): Demonstrates Shöve's layer masking capabilities.
-  - Shows how to use one layer as a mask for another, allowing you to create dynamic visibility effects where one layer controls what's visible in another.
+Each demo showcases different Shöve capabilities:
+- [**low-res**](https://github.com/Oval-Tutu/shove/blob/main/demo/low-res/init.lua):: Pixel-perfect scaling with a tiny 64x64 resolution
+- [**single-shader**](https://github.com/Oval-Tutu/shove/blob/main/demo/single-shader/init.lua): Apply shaders to specific layers
+- [**multiple-shaders**](https://github.com/Oval-Tutu/shove/blob/main/demo/multiple-shaders/init.lua): Chain multiple effects
+- [**mouse-input**](https://github.com/Oval-Tutu/shove/blob/main/demo/mouse-input/init.lua): Convert between screen and viewport coordinates
+- [**canvases-shaders**](https://github.com/Oval-Tutu/shove/blob/main/demo/canvases-shaders/init.lua): Apply different effects to different layers
+- [**stencil**](https://github.com/Oval-Tutu/shove/blob/main/demo/stencil/init.lua): Use stencil buffers with layers
+- [**mask**](https://github.com/Oval-Tutu/shove/blob/main/demo/mask/init.lua): Create dynamic visibility with layer masking
+- [**parallax**](https://github.com/Oval-Tutu/shove/blob/main/demo/parallax/init.lua): Multi-layered background scrolling with animated particles and bloom effects
 
 # Shöve Guide 📚
 
@@ -219,16 +206,11 @@ end
 
 ### Layer-Based Rendering
 
-Shöve's layer-based rendering system brings the power and flexibility of professional creative software to your LÖVE games.
-If you've ever used image editing, video production, or design tools, you'll immediately grasp what makes layers so valuable.
+Think of Shöve's layers like Photoshop or Figma layers—separate "sheets" that combine to create your complete scene.
 
-Conceptually, Shöve's layer-based rendering is like the layers in **Adobe Photoshop** or **Figma** – separate "sheets" that contain different elements of your game's visuals. Each layer exists independently but combines to create your complete scene.
-
-Just as you might put background elements on one Photoshop layer, characters on another, and UI elements on a third, Shöve lets you organize your game's rendering the same way. Imagine you're creating a game with a complex UI system.
-With traditional rendering, each frame requires carefully ordering every element:
 
 ```lua
--- Traditional approach
+-- Traditional approach (harder to manage)
 function love.draw()
   drawBackground()
   drawCharacters()
@@ -241,7 +223,7 @@ end
 With Shöve's layers, you can organize these logically and manage them independently:
 
 ```lua
--- Layer approach
+-- Layer approach (more flexible and organized)
 shove.beginDraw()
   shove.beginLayer("background")
     drawBackground()
@@ -256,30 +238,27 @@ shove.beginDraw()
     drawUI()
   shove.endLayer()
 
-  if debugMode then
-    shove.showLayer("debug")
-  else
-    shove.hideLayer("debug")
-  end
+  -- Only rendered when debug mode is on
   shove.beginLayer("debug")
-    drawDebugInfo() -- Only rendered when debugMode is true
+    if debugMode then
+      shove.showLayer("debug")
+      drawDebugInfo()
+    else
+      shove.hideLayer("debug")
+    end
   shove.endLayer()
 shove.endDraw()
 ```
 
+#### Key Benefits
+
 Many of the benefits of Shöve's layers are similar to those in professional creative software:
 
-- **Independent Control**: You can hide, show, or modify layers without affecting others
-- **Z-Ordering**: You can change which elements appear on top by adjusting layer order
-- **Effect Application**: Apply effects (shaders) to specific layers without affecting everything
-- **Masking**: Create masking effects where one layer controls the visibility of another
-
-For game developers specifically, layers offer powerful advantages:
-
-- **Visual Debugging**: Toggle debug visualization layers on/off like in **Unity's Scene View**
-- **Complex Effects**: Create advanced visual effects like reflections, lighting, or weather systems on isolated layers
-- **State Management**: Show/hide entire game states (menus, dialogs, cutscenes) by controlling layer visibility
-- **Composition**: Build up scenes from reusable components
+- **Independent Control:** Hide, show, or modify layers without affecting others
+- **Z-Ordering:** Change which elements appear on top
+- **Effect Application:** Apply shaders to specific layers
+- **Visual Debugging:** Toggle debug visualization on/off
+- **State Management:** Control entire game states through layer visibility
 
 Layer rendering provides powerful features for organizing your rendering into separate layers that can be manipulated independently.
 Under the hood, Shöve uses [LÖVE's Canvas system](https://love2d.org/wiki/Canvas) to achieve this, but hides the complexity behind a simple API.
@@ -351,7 +330,7 @@ end
 
 ## Layer Management
 
-While Shöve automatically creates layers when you first reference them with `beginLayer()`, there are several compelling reasons to manually create layers with `createLayer()` instead:
+While Shöve automatically creates layers when you first draw to them after declaring them with `beginLayer()`, there are several compelling reasons to manually create layers with `createLayer()` instead:
 
 ```lua
 -- Create a layer with specific properties
@@ -403,6 +382,7 @@ Creating all layers upfront improves predictability:
 - All canvases are allocated at once rather than during gameplay
 - Memory usage is more consistent
 - No canvas creation overhead during rendering
+- Dynamic layer creation can cause hitching or frame drops when over used
 
 ```lua
 function love.load()
@@ -881,7 +861,9 @@ end
 
 ### Performance Profiler
 
-Shöve includes a built-in performance profiler that provides real-time information about resolution management, layer status, and rendering performance. This can help diagnose scaling issues and optimize your game during development.
+Shöve includes a built-in performance profiler that provides real-time information about resolution management, layer status, and rendering performance.
+This can help diagnose scaling issues and optimize your game during development.
+The profiler does not have any active code paths active until you enable it, so it has zero impact on performance when hidden.
 
 The profiler overlay displays:
 - Hardware information (OS, CPU, GPU)
@@ -889,9 +871,29 @@ The profiler overlay displays:
 - Resolution and scaling information
 - Detailed layer information (when using layer rendering)
 
+The profiler is rendered after at the end of `shove.endDraw()` and can be toggled on/off with a keyboard shortcut.
+
+```lua
+-- The profiler loads automatically when the library initializes
+function love.draw()
+  shove.beginDraw()
+  -- Your drawing code here
+  shove.endDraw()
+  -- ** profiler rendered at the end of shove.endDraw() here **
+end
+```
+
+When evaluating batch processing impact, pay attention to:
+
+1. **State Changes**: Fewer is better, especially on mobile
+2. **Batch Groups**: Number of layer groups with similar properties
+3. **Batched Layers**: Total layers processed in batches
+4. **Batched Effect Operations**: How many effect applications were optimized
+
 #### Profiler Controls
 
 - **Keyboard:** <kbd>Ctrl</kbd> + <kbd>P</kbd> to toggle overlay
+- **Keyboard:** <kbd>Ctrl</kbd> + <kbd>T</kbd> to toggle FPS overlay
 - **Keyboard:** <kbd>Ctrl</kbd> + <kbd>V</kbd> to toggle VSync (when overlay is visible)
 - **Keyboard:** <kbd>Ctrl</kbd> + <kbd>S</kbd> to toggle overlay size
 - **Controller:** Select + A/Cross to toggle overlay
@@ -901,13 +903,74 @@ The profiler overlay displays:
 - **Touch:** Double-tap the overlay to toggle VSync (when overlay is visible)
 - **Touch:** Double-tap overlay panel border/edge to toggle overlay size
 
+#### Profiler Performance Considerations
+
+When running at very high frame rates (many hundred of FPS), the profiler itself introduces a small but measurable performance overhead.
+In our testing we observed the profiler's impact to be approximately 1.2% to 1.5% of total FPS.
+This overhead comes from the additional calculations, memory access, and UI rendering that the profiler performs each frame to track and display metrics.
+
+For most development scenarios, this minimal impact won't affect your workflow. However, when performing precise performance benchmarking or optimization on high-end systems, consider temporarily disabling the profiler by using the toggle shortcut (<kbd>Ctrl</kbd> + <kbd>P</kbd>) or removing the profiler module entirely for the most accurate measurements.
+
 #### Disabling the Profiler for Production
 
 The profiler is implemented in a separate file (`shove-profiler.lua`) so you can easily disable it in production builds.
-
-Don't include the profiler file in your production builds. Shöve will automatically detect its absence and use a no-op stub implementation:
-
+Remove profiler file in your production builds and Shöve will automatically detect its absence and use a no-op stub implementation.
 This approach ensures that the profiler adds zero overhead to your game in production releases while exposing useful tooling during development.
+
+## Optimizing Layer Rendering
+
+Shöve implements several sophisticated rendering optimizations that can help improve performance when using layer-based rendering. These optimizations focus on reducing state changes and minimizing draw calls.
+
+### Key Optimizations
+
+#### Layer Batching
+
+The core optimization in Shöve is layer batching, which:
+
+1. **Groups similar layers** based on shared properties (blend mode, effects, masks)
+2. **Processes effects in batches** to reduce shader switches
+3. **Minimizes state changes** by setting blend modes once per batch
+4. **Optimizes memory usage** with persistent table reuse
+
+These optimizations are particularly valuable for:
+- Games with many layers using the same blend mode
+- Scenes with multiple layers sharing identical effects
+- Lower-end hardware where state changes are expensive
+- Mobile devices where reducing draw calls improves battery life
+
+### Controlling Batch Processing
+
+Batch processing is enabled by default for layer-based render but can be toggled at runtime:
+
+```lua
+-- Disable batch processing
+local previousState = shove.setLayerBatching(false)
+
+-- Check current batch processing state
+local batchingEnabled = shove.getLayerBatching()
+
+-- Re-enable batch processing
+shove.setLayerBatching(true)
+```
+
+#### When to Disable Batching
+
+Despite its benefits, batch processing adds some CPU overhead. Consider disabling it when:
+
+- Your game has very few layers (less than 3-4)
+- Layers have unique blend modes or effects (no batching opportunities)
+- You're CPU-bound rather than GPU-bound
+- Profiler metrics show no significant reduction in state changes
+
+#### Testing Your Specific Case
+
+Since rendering performance is highly dependent on your specific game and target hardware, use the profiler to test both modes:
+1. Run your game with default settings (batching enabled)
+2. Note the FPS and state change metrics
+3. Disable batching: `shove.setLayerBatching(false)`
+4. Compare metrics to determine the best configuration
+
+The ideal setting varies by game, so let your profiler results guide your decision rather than assuming one approach is always better.
 
 ## API Reference
 
