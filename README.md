@@ -47,7 +47,7 @@ shove = require("shove")
 
 function love.load()
   -- Initialize Shöve with fixed game resolution and options
-  shove.setResolution(400, 300, {fitMethod = "aspect")
+  shove.setResolution(400, 300, {fitMethod = "aspect"})
   -- Set up a resizable window
   shove.setWindowMode(800, 600, {resizable = true})
 end
