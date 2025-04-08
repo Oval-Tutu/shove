@@ -1002,8 +1002,8 @@ local shove = {
       if state.viewport_width > 0 and state.viewport_height > 0 then
         local actualWidth, actualHeight
         if state.useSafeArea then
-          _, _, actualWidth, actualHeight = love.window.getSafeArea()
-        else
+          --_, _, actualWidth, actualHeight = love.window.getSafeArea()
+        --else
           actualWidth, actualHeight = love.graphics.getDimensions()
         end
         shove.resize(actualWidth, actualHeight)
@@ -1038,8 +1038,8 @@ local shove = {
       -- Get the actual dimensions (might differ from requested)
       local actualWidth, actualHeight
       if state.useSafeArea then
-        _, _, actualWidth, actualHeight = love.window.getSafeArea()
-      else
+        --_, _, actualWidth, actualHeight = love.window.getSafeArea()
+      --else
         actualWidth, actualHeight = love.graphics.getDimensions()
       end
       shove.resize(actualWidth, actualHeight)
