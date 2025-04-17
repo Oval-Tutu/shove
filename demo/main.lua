@@ -9,6 +9,7 @@ local demo_data = {
   { module = "multiple-shaders" },
   { module = "mouse-input" },
   { module = "canvases-shaders" },
+  { module = "canvas-proxy" },
   { module = "stencil" },
   { module = "mask" },
   { module = "parallax" },
