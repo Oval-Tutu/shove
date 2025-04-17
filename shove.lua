@@ -35,6 +35,12 @@ local state = {
   scale_y = 0,
   offset_x = 0,
   offset_y = 0,
+  -- Canvas management
+  canvasState = {
+    originalSetCanvas = nil,      -- Original function reference
+    shoveCanvas = nil,            -- Current Shöve canvas
+    externalCanvasActive = false, -- Whether a user canvas is active
+  },
   -- Layer-based rendering system
   layers = {
     byName = {},    -- Layers indexed by name for quick lookup
@@ -456,6 +462,12 @@ local function beginLayerDraw(layerName)
 
   -- Set as current layer and activate canvas
   state.layers.active = layer
+
+  -- Save the canvas state for the setCanvas() wrapper to use
+  state.canvasState.shoveCanvas = layer.canvas
+  state.canvasState.externalCanvasActive = false
+
+  -- If we have our wrapper active, use it
   love.graphics.setCanvas({ layer.canvas, stencil = layer.stencil })
   love.graphics.clear()
 
@@ -1037,7 +1049,48 @@ local shove = {
     -- Set flag to indicate we're in drawing mode
     state.inDrawMode = true
 
+    -- Only override setCanvas in "layer" mode
     if state.renderMode == "layer" then
+      state.canvasState.originalSetCanvas = love.graphics.setCanvas
+      love.graphics.setCanvas = function(...)
+        local args = {...}
+        if #args == 0 then
+          state.canvasState.originalSetCanvas()
+          state.canvasState.externalCanvasActive = false
+          return
+        else
+          state.canvasState.externalCanvasActive = true
+        end
+        return state.canvasState.originalSetCanvas(...)
+      end
+    elseif state.renderMode == "direct" then
+      state.canvasState.originalSetCanvas = love.graphics.setCanvas
+      love.graphics.setCanvas = function(...)
+        local args = {...}
+        if #args > 0 and type(args[1]) == "userdata" and args[1]:typeOf("Canvas") then
+          -- User is switching to their own canvas: reset transform/scissor
+          love.graphics.push()
+          love.graphics.origin()
+          love.graphics.setScissor()
+          local result = state.canvasState.originalSetCanvas(...)
+          return result
+        else
+          -- Switching back to default framebuffer: restore Shöve's transform/scissor
+          local result = state.canvasState.originalSetCanvas(...)
+          love.graphics.pop()
+          return result
+        end
+      end
+    end
+
+    -- Save current Shöve canvas state
+    if state.renderMode == "layer" then
+      if state.layers.active and state.layers.active.canvas then
+        state.canvasState.shoveCanvas = state.layers.active.canvas
+      else
+        state.canvasState.shoveCanvas = nil
+      end
+
       love.graphics.push()
 
       -- If no active layer, set the default one
@@ -1048,18 +1101,18 @@ local shove = {
       -- If the default layer has a canvas (which would happen if global effects were added),
       -- activate it so drawing commands go to it
       if state.layers.active and state.layers.active.name == "default" and
-         state.layers.active.canvas then
+        state.layers.active.canvas then
         love.graphics.setCanvas({ state.layers.active.canvas, stencil = state.layers.active.stencil })
         love.graphics.clear()
       end
       -- Otherwise, wait until beginLayer is explicitly called
 
     else
+      love.graphics.push()
       love.graphics.translate(state.offset_x, state.offset_y)
       love.graphics.setScissor(state.offset_x, state.offset_y,
-                              state.viewport_width * state.scale_x,
-                              state.viewport_height * state.scale_y)
-      love.graphics.push()
+                            state.viewport_width * state.scale_x,
+                            state.viewport_height * state.scale_y)
       love.graphics.scale(state.scale_x, state.scale_y)
     end
 
@@ -1082,6 +1135,12 @@ local shove = {
       return false
     end
 
+    -- Restore original setCanvas function only if overridden
+    if state.canvasState.originalSetCanvas then
+      love.graphics.setCanvas = state.canvasState.originalSetCanvas
+      state.canvasState.originalSetCanvas = nil
+    end
+
     if state.renderMode == "layer" then
       -- Ensure active layer is finished
       if state.layers.active then
@@ -1091,7 +1150,7 @@ local shove = {
       -- If there are global effects but no layer has been drawn to,
       -- ensure we have at least the default layer with a canvas
       local hasGlobalEffects = (globalEffects and #globalEffects > 0) or
-                               (state.layers.composite and #state.layers.composite.effects > 0)
+                                (state.layers.composite and #state.layers.composite.effects > 0)
 
       if hasGlobalEffects then
         local anyLayerHasCanvas = false
@@ -1129,7 +1188,6 @@ local shove = {
     else
       love.graphics.pop()
       love.graphics.setScissor()
-      love.graphics.translate(-state.offset_x, -state.offset_y)
     end
 
     -- Reset drawing mode flag
