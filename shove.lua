@@ -108,15 +108,42 @@ end
 -- Persistent tables for reuse to minimize allocations
 local sharedEffectsTable = {}
 local effectIds = {} -- For effect signature generation
+-- Canvas pool
+local canvasPool = setmetatable({}, {__mode = "v"}) -- weak values for garbage collection
 
 --- Ensures a layer has a valid canvas
 ---@param layer ShoveLayer Layer to check
 ---@return love.Canvas canvas The layer's canvas
 local function ensureLayerCanvas(layer)
   if not layer.canvas then
-    layer.canvas = love.graphics.newCanvas(state.viewport_width, state.viewport_height)
+    -- Check if we can reuse an existing canvas from the pool
+    local poolKey = state.viewport_width .. "x" .. state.viewport_height
+    if #canvasPool > 0 then
+      layer.canvas = table.remove(canvasPool)
+      -- Clear the canvas
+      love.graphics.setCanvas(layer.canvas)
+      love.graphics.clear()
+      love.graphics.setCanvas()
+    else
+      -- Create a new canvas
+      layer.canvas = love.graphics.newCanvas(state.viewport_width, state.viewport_height)
+    end
   end
   return layer.canvas
+end
+
+-- Add to pool instead of destroying
+local function releaseLayerCanvas(layerName)
+  local layer = getLayer(layerName)
+  if not layer or not layer.canvas then
+    return false
+  end
+
+  -- Add to pool instead of releasing
+  local poolKey = state.viewport_width .. "x" .. state.viewport_height
+  table.insert(canvasPool, layer.canvas)
+  layer.canvas = nil
+  return true
 end
 
 --- Calculate transformation values based on current settings
