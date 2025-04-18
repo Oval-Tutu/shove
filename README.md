@@ -298,6 +298,60 @@ function love.draw()
 end
 ```
 
+### Canvas State Tracking
+
+Shöve automatically manages canvas states to ensure your drawing operations work correctly with both Shöve's rendering pipeline and your own custom canvas operations.
+
+**When you call `shove.beginDraw()`, Shöve temporarily wraps `love.graphics.setCanvas()` until you call `shove.endDraw()`.**
+
+This means:
+- You can safely use `love.graphics.setCanvas()` inside the Shöve draw cycle to render to your own canvases.
+- When switching back to the default canvas, Shöve automatically restores its transforms and context.
+- After `shove.endDraw()`, `love.graphics.setCanvas()` is restored to its original behavior.
+
+#### Why is this useful?
+
+This feature allows you to:
+- Use Shöve's Direct Rendering without having to modify existing games that use canvases.
+- Use post-processing effects with custom canvases while still benefiting from Shöve's resolution management
+- Integrate with other libraries that use canvases
+- Create advanced visual effects without breaking Shöve's rendering pipeline
+
+```lua
+function love.draw()
+  -- Begin Shöve's drawing context
+  shove.beginDraw()
+  
+    -- Draw a red circle in the Shöve managed area
+    love.graphics.setColor(1, 0, 0)
+    love.graphics.circle("fill", 200, 150, 100)
+    
+    -- User manually changes canvas during Shöve's drawing cycle
+    love.graphics.setCanvas(userCanvas)
+    love.graphics.clear(0, 0, 0, 0)
+    love.graphics.setColor(0, 1, 0)
+    love.graphics.rectangle("fill", 50, 50, 100, 100)
+    love.graphics.setCanvas() -- Reset to default
+    
+    -- Continue drawing in Shöve's context with transforms preserved
+    love.graphics.setColor(0, 0, 1)
+    love.graphics.circle("fill", 200, 150, 50)
+    
+  -- End Shöve's drawing context
+  shove.endDraw()
+  
+  -- Draw your custom canvas outside Shöve's context if desired
+  love.graphics.setColor(1, 1, 1)
+  love.graphics.draw(userCanvas, 580, 10)
+end
+```
+
+#### Technical Details
+
+- When in `direct` render mode, transforms are preserved when switching back from user canvases.
+- When in `layer` render mode, the active layer is restored when switching back from user canvases.
+- Nested canvas operations are properly supported
+
 ## Coordinate Handling
 
 Shöve provides functions to convert between screen and game viewport coordinates:
