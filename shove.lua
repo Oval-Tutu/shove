@@ -45,10 +45,11 @@ local state = {
   },
   -- Layer-based rendering system
   layers = {
-    byName = {},    -- Layers indexed by name for quick lookup
-    ordered = {},   -- Ordered array for rendering sequence
-    active = nil,   -- Currently active layer for drawing
-    composite = nil -- Final composite layer for output
+    byName = {},      -- Layers indexed by name for quick lookup
+    ordered = {},     -- Ordered array for rendering sequence
+    active = nil,     -- Currently active layer for drawing
+    composite = nil,   -- Final composite layer for output
+    needsSort = false -- Flag to track if sorting is needed
   },
   -- Shader for masking
   maskShader = nil,
@@ -208,10 +209,8 @@ local function createLayer(layerName, options)
   state.layers.byName[layerName] = layer
   table.insert(state.layers.ordered, layer)
 
-  -- Sort by zIndex
-  table.sort(state.layers.ordered, function(a, b)
-    return a.zIndex < b.zIndex
-  end)
+  -- Mark that sorting is needed
+  state.layers.needsSort = true
 
   return layer
 end
@@ -626,6 +625,14 @@ local function compositeLayersOnScreen(globalEffects, applyPersistentEffects)
   -- Ensure we have a composite layer
   if not state.layers.composite then
     createCompositeLayer()
+  end
+
+  -- Sort layers only if needed
+  if state.layers.needsSort then
+    table.sort(state.layers.ordered, function(a, b)
+      return a.zIndex < b.zIndex
+    end)
+    state.layers.needsSort = false
   end
 
   -- Cache frequently accessed state properties
@@ -1410,10 +1417,8 @@ local shove = {
 
     layer.zIndex = zIndex
 
-    -- Re-sort layers
-    table.sort(state.layers.ordered, function(a, b)
-      return a.zIndex < b.zIndex
-    end)
+    -- Mark that sorting is needed
+    state.layers.needsSort = true
 
     return true
   end,
