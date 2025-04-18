@@ -35,6 +35,8 @@ local state = {
   scale_y = 0,
   offset_x = 0,
   offset_y = 0,
+  -- Store color state for restoration
+  savedColor = nil,
   -- Canvas management
   canvasState = {
     originalSetCanvas = nil,      -- Original function reference
@@ -431,6 +433,9 @@ local function beginLayerDraw(layerName)
     return false
   end
 
+  -- Save color state
+  state.savedColor = { love.graphics.getColor() }
+
   local layer = getLayer(layerName)
   if not layer then
     -- Deferred canvas creation for implicitly created layers
@@ -479,6 +484,11 @@ end
 local function endLayerDraw()
   -- Simply mark that we're done with this layer
   if state.renderMode == "layer" and state.inDrawMode then
+    -- Restore color state
+    if state.savedColor then
+      love.graphics.setColor(unpack(state.savedColor))
+      state.savedColor = nil
+    end
     -- Reset canvas temporarily
     love.graphics.setCanvas()
     return true
@@ -1049,6 +1059,9 @@ local shove = {
     -- Set flag to indicate we're in drawing mode
     state.inDrawMode = true
 
+    -- Save color state
+    state.savedColor = { love.graphics.getColor() }
+
     -- Only override setCanvas in "layer" mode
     if state.renderMode == "layer" then
       state.canvasState.originalSetCanvas = love.graphics.setCanvas
@@ -1188,6 +1201,12 @@ local shove = {
     else
       love.graphics.pop()
       love.graphics.setScissor()
+    end
+
+    -- Restore color state
+    if state.savedColor then
+      love.graphics.setColor(unpack(state.savedColor))
+      state.savedColor = nil
     end
 
     -- Reset drawing mode flag
