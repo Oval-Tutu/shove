@@ -550,9 +550,37 @@ local batchCanvas = nil
 local function drawLayerBatch(layerGroup)
   if not layerGroup or #layerGroup.layers == 0 then return end
 
-  -- Set blend mode once for the entire group
-  love.graphics.setBlendMode(layerGroup.blendMode, "premultiplied")
-  state.specialLayerUsage.stateChanges = state.specialLayerUsage.stateChanges + 1
+  local layerCount = #layerGroup.layers
+
+  -- Skip unnecessary batching for single layers
+  if layerCount == 1 then
+    local layer = layerGroup.layers[1]
+    love.graphics.setBlendMode(layer.blendMode, "premultiplied")
+    state.specialLayerUsage.stateChanges = state.specialLayerUsage.stateChanges + 1
+
+    -- Apply mask if needed
+    if layer.maskLayer and layer.maskLayerRef and layer.maskLayerRef.canvas then
+      -- Apply mask code...
+      love.graphics.clear(false, false, true)
+      love.graphics.stencil(function()
+        love.graphics.setShader(state.maskShader)
+        love.graphics.draw(layer.maskLayerRef.canvas)
+        love.graphics.setShader()
+      end, "replace", 1)
+      love.graphics.setStencilTest("equal", 1)
+      state.specialLayerUsage.stateChanges = state.specialLayerUsage.stateChanges + 1
+    end
+
+    -- Draw the layer with effects
+    applyEffects(layer.canvas, layer.effects)
+
+    -- Reset stencil if used
+    if layer.maskLayer then
+      love.graphics.setStencilTest()
+      state.specialLayerUsage.stateChanges = state.specialLayerUsage.stateChanges + 1
+    end
+    return
+  end
 
   -- For masked layers, process individually
   if layerGroup.hasMask then
@@ -728,8 +756,8 @@ local function compositeLayersOnScreen(globalEffects, applyPersistentEffects)
           signature = signature,
           layers = {},
           blendMode = layer.blendMode,
-          hasMask = layer.maskLayer ~= nil,
-          effects = layer.effects,
+            hasMask = layer.maskLayer ~= nil,
+            effects = layer.effects,
           effectsCount = #layer.effects,
           minZIndex = layer.zIndex
         }
