@@ -298,54 +298,57 @@ local function getShaderID(effect)
   return id
 end
 
---- Generate a signature string for a layer based on its properties
+-- Add blend mode identifier (map to numbers 1-8)
+local blendModeIds = {
+  alpha = 1, replace = 2, screen = 3, add = 4,
+  subtract = 5, multiply = 6, lighten = 7, darken = 8
+}
+
+--- Generate a signature hash for a layer based on its properties
 ---@param layer ShoveLayer Layer to generate signature for
----@return string signature A string representing the layer's key properties
+---@return number signature A numeric hash representing the layer's key properties
 local function getLayerSignature(layer)
-  if not layer then return "" end
+  if not layer then return 0 end -- Return numeric value for consistency
 
   -- Check if we have a cached signature that's still valid
   if not layer._effectsHashDirty and layer._effectsHash then
     return layer._effectsHash
   end
 
-  -- Enhanced effects signature using shader IDs
+  -- Build base signature from blend mode and mask states
+  local signatureBase = blendModeIds[layer.blendMode] or 1
+  signatureBase = signatureBase * 4 + (layer.maskLayer and 2 or 0) + (layer.isUsedAsMask and 1 or 0)
+
+  -- Calculate effects hash
+  local effectsHash = 0
   local count = #layer.effects
-  local effectsPart = "0"
 
   if count > 0 then
-    -- Clear and reuse table
+    -- Clear and reuse table for consistent ordering
     for i = 1, #effectIds do effectIds[i] = nil end
 
     -- Collect shader IDs
     for i = 1, count do
-      local effect = layer.effects[i]
-      local id = getShaderID(effect)
-      effectIds[i] = id
+      effectIds[i] = getShaderID(layer.effects[i])
     end
 
-    -- Sort IDs for consistent ordering regardless of shader creation order
+    -- Sort IDs for consistent ordering
     if count > 1 then
       table.sort(effectIds)
     end
 
-    -- Get effects as a string
-    effectsPart = table.concat(effectIds, ",")
+    -- Hash the sorted effects
+    for i = 1, count do
+      -- Use simple prime number hashing (31 is slightly better than 37 for this use)
+      effectsHash = (effectsHash * 31 + effectIds[i]) % 1000000007
+    end
   end
 
-  -- Format the complete signature in one operation with no concatenation
-  local sig = string.format("%s|%s|%s|%s",
-    layer.blendMode or "alpha",
-    layer.maskLayer and "masked" or "unmasked",
-    layer.isUsedAsMask and "mask" or "nomask",
-    effectsPart
-  )
-
-  -- Cache the signature
-  layer._effectsHash = sig
+  -- Combine parts - use addition instead of multiplication for better precision
+  layer._effectsHash = signatureBase + effectsHash
   layer._effectsHashDirty = false
 
-  return sig
+  return layer._effectsHash
 end
 
 -- Persistent table to avoid allocations in the hot loop
