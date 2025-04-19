@@ -2226,17 +2226,47 @@ local shove = {
 
   --- Return a copy of relevant state data for profiler metrics
   getState = function()
-    -- Persistent caches to avoid allocations
-    shove._stateCache = shove._stateCache or {}
+    -- Initialize complete table structure once
+    if not shove._stateCache then
+      shove._stateCache = {
+        layers = {
+          ordered = {},
+          count = 0,
+          canvas_count = 0,
+          mask_count = 0,
+          special_layer_count = 0,
+          active = nil
+        },
+        specialLayerUsage = {
+          compositeSwitches = 0,
+          effectBufferSwitches = 0,
+          effectsApplied = 0,
+          batchGroups = 0,
+          batchedLayers = 0,
+          stateChanges = 0,
+          batchedEffectOperations = 0
+        },
+        global_effects_count = 0,
+        -- Pre-initialize all scalar properties
+        fitMethod = "",
+        renderMode = "",
+        scalingFilter = "",
+        screen_width = 0,
+        screen_height = 0,
+        viewport_width = 0,
+        viewport_height = 0,
+        rendered_width = 0,
+        rendered_height = 0,
+        scale_x = 0,
+        scale_y = 0,
+        offset_x = 0,
+        offset_y = 0
+      }
+      shove._layerInfoCache = {}
+    end
+
     local result = shove._stateCache
-
-    -- Cache for layer information tables
-    shove._layerInfoCache = shove._layerInfoCache or {}
     local persistentLayerInfo = shove._layerInfoCache
-
-    -- Make sure nested tables exist
-    result.layers = result.layers or {}
-    result.specialLayerUsage = result.specialLayerUsage or {}
 
     -- Update basic state variables (always needed)
     result.fitMethod = state.fitMethod
@@ -2269,8 +2299,7 @@ local shove = {
       -- Track counts in a single pass
       local canvasCount, maskCount, specialLayerCount = 0, 0, 0
 
-      -- Prepare ordered array if needed
-      layers.ordered = layers.ordered or {}
+      -- Use the pre-created ordered array
       local orderedLayerInfo = layers.ordered
 
       -- Process layers
@@ -2282,9 +2311,22 @@ local shove = {
         if layer.isUsedAsMask then maskCount = maskCount + 1 end
         if layer.isSpecial then specialLayerCount = specialLayerCount + 1 end
 
-        -- Reuse existing table or create new one
-        local layerInfo = persistentLayerInfo[i] or {}
-        persistentLayerInfo[i] = layerInfo
+        -- Ensure the layerInfo table exists for this index
+        if not persistentLayerInfo[i] then
+          persistentLayerInfo[i] = {
+            name = "",
+            zIndex = 0,
+            visible = false,
+            blendMode = "",
+            blendAlphaMode = "",
+            hasCanvas = false,
+            isSpecial = false,
+            effects = 0,
+            isUsedAsMask = false
+          }
+        end
+
+        local layerInfo = persistentLayerInfo[i]
 
         -- Update layer info (only what's needed for debug)
         layerInfo.name = layer.name
@@ -2327,15 +2369,28 @@ local shove = {
       usage.batchedLayers = state.specialLayerUsage.batchedLayers
       usage.stateChanges = state.specialLayerUsage.stateChanges
       usage.batchedEffectOperations = state.specialLayerUsage.batchedEffectOperations
-    elseif result.layers.ordered then
-      -- Clean up layer data if not in layer render mode
-      result.layers.ordered = nil
+    else
+      -- Just reset values without destroying tables when not in layer render mode
       result.layers.count = 0
       result.layers.canvas_count = 0
       result.layers.mask_count = 0
       result.layers.special_layer_count = 0
       result.layers.active = nil
-      result.specialLayerUsage = nil
+
+      -- Clear the ordered array without destroying it
+      for i = 1, #result.layers.ordered do
+        result.layers.ordered[i] = nil
+      end
+
+      -- Reset usage counters without destroying the table
+      local usage = result.specialLayerUsage
+      usage.compositeSwitches = 0
+      usage.effectBufferSwitches = 0
+      usage.effectsApplied = 0
+      usage.batchGroups = 0
+      usage.batchedLayers = 0
+      usage.stateChanges = 0
+      usage.batchedEffectOperations = 0
     end
 
     return result
