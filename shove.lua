@@ -42,7 +42,8 @@ local state = {
     shader = nil,         -- Track current shader
     blendMode = nil,
     blendAlphaMode = nil,
-    stencilTest = nil
+    stencilTest = nil,
+    stencilValue = nil
   },
   -- Canvas management
   canvasState = {
@@ -199,6 +200,33 @@ local function setBlendMode(mode, alphaMode)
     love.graphics.setBlendMode(mode, alphaMode)
     state.currentRenderState.blendMode = mode
     state.currentRenderState.blendAlphaMode = alphaMode
+    -- Only count meaningful state changes
+    if state.inDrawMode then
+      state.specialLayerUsage.stateChanges = state.specialLayerUsage.stateChanges + 1
+    end
+    return true
+  end
+  return false
+end
+
+--- Sets stencil test only if different from current state
+---@param mode string|nil Stencil test mode to set
+---@param value number|nil Value to test against
+---@return boolean changed Whether the stencil test was actually changed
+local function setStencilTest(mode, value)
+  local isNil = (mode == nil)
+  local currentMode = state.currentRenderState.stencilTest
+  local currentValue = state.currentRenderState.stencilValue
+
+  if (currentMode ~= mode) or (not isNil and currentValue ~= value) then
+    if isNil then
+      love.graphics.setStencilTest()
+    else
+      love.graphics.setStencilTest(mode, value)
+    end
+
+    state.currentRenderState.stencilTest = mode
+    state.currentRenderState.stencilValue = isNil and nil or value
 
     -- Only count meaningful state changes
     if state.inDrawMode then
@@ -635,8 +663,7 @@ local function drawLayerBatch(layerGroup)
         love.graphics.draw(layer.maskLayerRef.canvas)
         setShader(nil)
       end, "replace", 1)
-      love.graphics.setStencilTest("equal", 1)
-      state.specialLayerUsage.stateChanges = state.specialLayerUsage.stateChanges + 1
+      setStencilTest("equal", 1)
     end
 
     -- Draw the layer with effects
@@ -644,8 +671,7 @@ local function drawLayerBatch(layerGroup)
 
     -- Reset stencil if used
     if layer.maskLayer then
-      love.graphics.setStencilTest()
-      state.specialLayerUsage.stateChanges = state.specialLayerUsage.stateChanges + 1
+      setStencilTest(nil)
     end
     return
   end
@@ -689,8 +715,7 @@ local function drawLayerBatch(layerGroup)
           love.graphics.draw(maskLayer.canvas)
           setShader(nil)
         end, "replace", 1)
-        love.graphics.setStencilTest("equal", 1)
-        state.specialLayerUsage.stateChanges = state.specialLayerUsage.stateChanges + 1
+        setStencilTest("equal", 1)
       end
     end
 
@@ -745,8 +770,7 @@ local function drawLayerBatch(layerGroup)
 
     -- Reset stencil only once after processing all layers with this mask
     if maskName ~= "none" then
-      love.graphics.setStencilTest()
-      state.specialLayerUsage.stateChanges = state.specialLayerUsage.stateChanges + 1
+      setStencilTest(nil)
     end
   end
 
@@ -887,8 +911,7 @@ local function compositeLayersOnScreen(globalEffects, applyPersistentEffects)
                 setShader(nil)
               end, "replace", 1)
               -- Only draw where stencil value equals 1
-              love.graphics.setStencilTest("equal", 1)
-              state.specialLayerUsage.stateChanges = state.specialLayerUsage.stateChanges + 1
+              setStencilTest("equal", 1)
             end
           end
 
@@ -902,8 +925,7 @@ local function compositeLayersOnScreen(globalEffects, applyPersistentEffects)
 
           -- Reset stencil if used
           if layer.maskLayer then
-            love.graphics.setStencilTest()
-            state.specialLayerUsage.stateChanges = state.specialLayerUsage.stateChanges + 1
+            setStencilTest(nil)
           end
         end
       end
@@ -1217,6 +1239,8 @@ local shove = {
     state.currentRenderState.shader = nil         -- Reset shader tracking
     state.currentRenderState.blendMode = nil      -- Reset blend mode tracking
     state.currentRenderState.blendAlphaMode = nil -- Reset alpha mode tracking
+    state.currentRenderState.stencilTest = nil
+    state.currentRenderState.stencilValue = nil
 
     -- Set flag to indicate we're in drawing mode
     state.inDrawMode = true
@@ -1359,7 +1383,7 @@ local shove = {
       -- Make absolutely sure we reset canvas and shader
       love.graphics.setCanvas()
       setShader(nil)
-      love.graphics.setStencilTest()
+      setStencilTest(nil)
     else
       love.graphics.pop()
       love.graphics.setScissor()
@@ -1376,6 +1400,8 @@ local shove = {
     state.currentRenderState.shader = nil
     state.currentRenderState.blendMode = nil
     state.currentRenderState.blendAlphaMode = nil
+    state.currentRenderState.stencilTest = nil
+    state.currentRenderState.stencilValue = nil
 
     shove.profiler.renderOverlay()
 
