@@ -37,6 +37,13 @@ local state = {
   offset_y = 0,
   -- Store color state for restoration
   savedColor = nil,
+  -- Add render state tracking
+  currentRenderState = {
+    shader = nil,         -- Track current shader
+    blendMode = nil,
+    blendAlphaMode = nil,
+    stencilTest = nil
+  },
   -- Canvas management
   canvasState = {
     originalSetCanvas = nil,      -- Original function reference
@@ -164,6 +171,22 @@ local function releaseLayerCanvas(layerName)
   table.insert(pool, layer.canvas)
   layer.canvas = nil
   return true
+end
+
+--- Sets a shader only if different from current shader
+---@param shader love.Shader|nil Shader to set, or nil to use default
+---@return boolean changed Whether the shader was actually changed
+local function setShader(shader)
+  if state.currentRenderState.shader ~= shader then
+    love.graphics.setShader(shader)
+    state.currentRenderState.shader = shader
+    -- Only count meaningful state changes
+    if state.inDrawMode then
+      state.specialLayerUsage.stateChanges = state.specialLayerUsage.stateChanges + 1
+    end
+    return true
+  end
+  return false
 end
 
 --- Calculate transformation values based on current settings
@@ -418,7 +441,7 @@ local function applyEffects(canvas, effects)
   end
 
   if #effects == 1 then
-    love.graphics.setShader(effects[1])
+    setShader(effects[1])
     love.graphics.draw(canvas)
     state.specialLayerUsage.effectsApplied = state.specialLayerUsage.effectsApplied + 1
   else
@@ -447,7 +470,7 @@ local function applyEffects(canvas, effects)
     -- Copy initial contents to first buffer
     love.graphics.setCanvas(fxCanvasA)
     love.graphics.clear()
-    love.graphics.setShader() -- Use default shader for the initial copy
+    setShader(nil) -- Use default shader for the initial copy
     love.graphics.draw(canvas)
 
     local input = fxCanvasA
@@ -457,7 +480,7 @@ local function applyEffects(canvas, effects)
     for i = 1, #effects do
       love.graphics.setCanvas(output)
       love.graphics.clear()
-      love.graphics.setShader(effects[i])
+      setShader(effects[i])
       love.graphics.draw(input)
 
       -- Swap buffers for next pass
@@ -470,14 +493,14 @@ local function applyEffects(canvas, effects)
 
     -- NOTE! Restore coordinate system BEFORE final drawing
     love.graphics.setCanvas(_canvas)
-    love.graphics.setShader()
+    setShader(nil)
     -- First restore the coordinate system
     love.graphics.pop()
     -- Then draw with proper transforms
     love.graphics.draw(input)
   end
 
-  love.graphics.setShader()
+  setShader(nil)
 end
 
 --- Begin drawing to a specific layer
@@ -588,9 +611,9 @@ local function drawLayerBatch(layerGroup)
     if layer.maskLayer and layer.maskLayerRef and layer.maskLayerRef.canvas then
       love.graphics.clear(false, false, true)
       love.graphics.stencil(function()
-        love.graphics.setShader(state.maskShader)
+        setShader(state.maskShader)
         love.graphics.draw(layer.maskLayerRef.canvas)
-        love.graphics.setShader()
+        setShader(nil)
       end, "replace", 1)
       love.graphics.setStencilTest("equal", 1)
       state.specialLayerUsage.stateChanges = state.specialLayerUsage.stateChanges + 1
@@ -642,9 +665,9 @@ local function drawLayerBatch(layerGroup)
       if maskLayer and maskLayer.canvas then
         love.graphics.clear(false, false, true)
         love.graphics.stencil(function()
-          love.graphics.setShader(state.maskShader)
+          setShader(state.maskShader)
           love.graphics.draw(maskLayer.canvas)
-          love.graphics.setShader()
+          setShader(nil)
         end, "replace", 1)
         love.graphics.setStencilTest("equal", 1)
         state.specialLayerUsage.stateChanges = state.specialLayerUsage.stateChanges + 1
@@ -837,9 +860,9 @@ local function compositeLayersOnScreen(globalEffects, applyPersistentEffects)
               love.graphics.clear(false, false, true)
               love.graphics.stencil(function()
                 -- Use mask shader to properly handle transparent pixels
-                love.graphics.setShader(state.maskShader)
+                setShader(state.maskShader)
                 love.graphics.draw(maskLayer.canvas)
-                love.graphics.setShader()
+                setShader(nil)
               end, "replace", 1)
               -- Only draw where stencil value equals 1
               love.graphics.setStencilTest("equal", 1)
@@ -1169,6 +1192,7 @@ local shove = {
     state.specialLayerUsage.batchedLayers = 0
     state.specialLayerUsage.stateChanges = 0
     state.specialLayerUsage.batchedEffectOperations = 0
+    state.currentRenderState.shader = nil  -- Reset shader tracking
 
     -- Set flag to indicate we're in drawing mode
     state.inDrawMode = true
@@ -1310,7 +1334,7 @@ local shove = {
 
       -- Make absolutely sure we reset canvas and shader
       love.graphics.setCanvas()
-      love.graphics.setShader()
+      setShader(nil)
       love.graphics.setStencilTest()
     else
       love.graphics.pop()
@@ -1323,8 +1347,9 @@ local shove = {
       state.savedColor = nil
     end
 
-    -- Reset drawing mode flag
+    -- Reset drawing mode flag and render state tracking
     state.inDrawMode = false
+    state.currentRenderState.shader = nil
 
     shove.profiler.renderOverlay()
 
