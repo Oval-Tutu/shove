@@ -12,6 +12,8 @@ local demo_data = {
   { module = "stencil" },
   { module = "mask" },
   { module = "parallax" },
+  { module = "user-canvas-direct" },
+  { module = "user-canvas-layer" },
 }
 
 local demos = {}
