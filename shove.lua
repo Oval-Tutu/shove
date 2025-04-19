@@ -108,25 +108,45 @@ end
 -- Persistent tables for reuse to minimize allocations
 local sharedEffectsTable = {}
 local effectIds = {} -- For effect signature generation
--- Canvas pool
-local canvasPool = setmetatable({}, {__mode = "v"}) -- weak values for garbage collection
+-- Canvas pools
+local canvasPools = {
+  standard = {},
+  stencil = {}
+}
 
 --- Ensures a layer has a valid canvas
 ---@param layer ShoveLayer Layer to check
 ---@return love.Canvas canvas The layer's canvas
 local function ensureLayerCanvas(layer)
   if not layer.canvas then
-    -- Check if we can reuse an existing canvas from the pool
-    local poolKey = state.viewport_width .. "x" .. state.viewport_height
-    if #canvasPool > 0 then
-      layer.canvas = table.remove(canvasPool)
+    -- Choose appropriate pool based on stencil support
+    local pool = layer.stencil and canvasPools.stencil or canvasPools.standard
+
+    if #pool > 0 then
+      layer.canvas = table.remove(pool)
       -- Clear the canvas
       love.graphics.setCanvas(layer.canvas)
       love.graphics.clear()
       love.graphics.setCanvas()
     else
-      -- Create a new canvas
-      layer.canvas = love.graphics.newCanvas(state.viewport_width, state.viewport_height)
+      -- Create a new canvas with appropriate settings
+      if layer.stencil then
+        layer.canvas = love.graphics.newCanvas(state.viewport_width, state.viewport_height, true) -- stencil=true
+      else
+        layer.canvas = love.graphics.newCanvas(state.viewport_width, state.viewport_height)
+        local function releaseLayerCanvas(layerName)
+          local layer = getLayer(layerName)
+          if not layer or not layer.canvas then
+            return false
+          end
+
+          -- Add to appropriate pool
+          local pool = layer.stencil and canvasPools.stencil or canvasPools.standard
+          table.insert(pool, layer.canvas)
+          layer.canvas = nil
+          return true
+        end
+      end
     end
   end
   return layer.canvas
@@ -139,9 +159,9 @@ local function releaseLayerCanvas(layerName)
     return false
   end
 
-  -- Add to pool instead of releasing
-  local poolKey = state.viewport_width .. "x" .. state.viewport_height
-  table.insert(canvasPool, layer.canvas)
+  -- Add to appropriate pool
+  local pool = layer.stencil and canvasPools.stencil or canvasPools.standard
+  table.insert(pool, layer.canvas)
   layer.canvas = nil
   return true
 end
