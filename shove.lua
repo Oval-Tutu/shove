@@ -967,8 +967,8 @@ local shove = {
   _VERSION = {
     major = 1,
     minor = 0,
-    patch = 5,
-    string = "1.0.5"
+    patch = 6,
+    string = "1.0.6"
   },
   --- Blend mode constants
   BLEND = {
