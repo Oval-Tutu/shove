@@ -328,47 +328,43 @@ local blendModeIds = {
 ---@param layer ShoveLayer Layer to generate signature for
 ---@return number signature A numeric hash representing the layer's key properties
 local function getLayerSignature(layer)
-  if not layer then return 0 end -- Return numeric value for consistency
+  if not layer then return 0 end
 
-  -- Check if we have a cached signature that's still valid
+  -- Use cached signature if available
   if not layer._effectsHashDirty and layer._effectsHash then
     return layer._effectsHash
   end
 
-  -- Build base signature from blend mode and mask states
-  local signatureBase = blendModeIds[layer.blendMode] or 1
-  signatureBase = signatureBase * 4 + (layer.maskLayer and 2 or 0) + (layer.isUsedAsMask and 1 or 0)
+  -- Build base signature directly (using multiplication instead of bit shifts)
+  local signature = (blendModeIds[layer.blendMode] or 1) * 4
+  if layer.maskLayer then signature = signature + 2 end
+  if layer.isUsedAsMask then signature = signature + 1 end
 
-  -- Calculate effects hash
-  local effectsHash = 0
-  local count = #layer.effects
-
-  if count > 0 then
-    -- Clear and reuse table for consistent ordering
-    for i = 1, #effectIds do effectIds[i] = nil end
-
-    -- Collect shader IDs
-    for i = 1, count do
-      effectIds[i] = getShaderID(layer.effects[i])
-    end
-
-    -- Sort IDs for consistent ordering
-    if count > 1 then
-      table.sort(effectIds)
-    end
-
-    -- Hash the sorted effects
-    for i = 1, count do
-      -- Use simple prime number hashing (31 is slightly better than 37 for this use)
-      effectsHash = (effectsHash * 31 + effectIds[i]) % 1000000007
-    end
+  -- For layers with no effects, this is the complete signature
+  if #layer.effects == 0 then
+    layer._effectsHash = signature
+    layer._effectsHashDirty = false
+    return signature
   end
 
-  -- Combine parts - use addition instead of multiplication for better precision
-  layer._effectsHash = signatureBase + effectsHash
-  layer._effectsHashDirty = false
+  -- For single effect layers, just add the shader ID
+  if #layer.effects == 1 then
+    signature = signature + getShaderID(layer.effects[1]) * 8
+    layer._effectsHash = signature
+    layer._effectsHashDirty = false
+    return signature
+  end
 
-  return layer._effectsHash
+  -- For multiple effects, use a faster hashing approach
+  local hash = signature
+  for i = 1, #layer.effects do
+    -- Use simple prime number hashing as alternative to XOR
+    hash = (hash * 31 + getShaderID(layer.effects[i]) * (i * 13)) % 2147483647
+  end
+
+  layer._effectsHash = hash
+  layer._effectsHashDirty = false
+  return hash
 end
 
 -- Persistent table to avoid allocations in the hot loop
