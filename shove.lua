@@ -653,7 +653,6 @@ local function drawLayerBatch(layerGroup)
   if layerCount == 1 then
     local layer = layerGroup.layers[1]
     setBlendMode(layer.blendMode, "premultiplied")
-    state.specialLayerUsage.stateChanges = state.specialLayerUsage.stateChanges + 1
 
     -- Apply mask if needed
     if layer.maskLayer and layer.maskLayerRef and layer.maskLayerRef.canvas then
@@ -918,7 +917,6 @@ local function compositeLayersOnScreen(globalEffects, applyPersistentEffects)
           -- Use premultiplied alpha when drawing canvases
           -- But respect the layer's blend mode
           setBlendMode(layer.blendMode, "premultiplied")
-          state.specialLayerUsage.stateChanges = state.specialLayerUsage.stateChanges + 1
 
           -- Apply effects (or draw directly if no effects)
           applyEffects(layer.canvas, layer.effects)
