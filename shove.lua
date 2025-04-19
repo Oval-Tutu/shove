@@ -189,6 +189,26 @@ local function setShader(shader)
   return false
 end
 
+--- Sets blend mode only if different from current state
+---@param mode love.BlendMode Blend mode to set
+---@param alphaMode love.BlendAlphaMode Alpha blend mode to set
+---@return boolean changed Whether the blend mode was actually changed
+local function setBlendMode(mode, alphaMode)
+  if state.currentRenderState.blendMode ~= mode or
+     state.currentRenderState.blendAlphaMode ~= alphaMode then
+    love.graphics.setBlendMode(mode, alphaMode)
+    state.currentRenderState.blendMode = mode
+    state.currentRenderState.blendAlphaMode = alphaMode
+
+    -- Only count meaningful state changes
+    if state.inDrawMode then
+      state.specialLayerUsage.stateChanges = state.specialLayerUsage.stateChanges + 1
+    end
+    return true
+  end
+  return false
+end
+
 --- Calculate transformation values based on current settings
 local function calculateTransforms()
   -- Calculate initial scale factors (used by most modes)
@@ -604,7 +624,7 @@ local function drawLayerBatch(layerGroup)
   -- Fast path for single layers
   if layerCount == 1 then
     local layer = layerGroup.layers[1]
-    love.graphics.setBlendMode(layer.blendMode, "premultiplied")
+    setBlendMode(layer.blendMode, "premultiplied")
     state.specialLayerUsage.stateChanges = state.specialLayerUsage.stateChanges + 1
 
     -- Apply mask if needed
@@ -633,7 +653,7 @@ local function drawLayerBatch(layerGroup)
   -- For layers without masks and effects, draw them directly
   if not layerGroup.hasMask and layerGroup.effectsCount == 0 then
     for _, layer in ipairs(layerGroup.layers) do
-      love.graphics.setBlendMode(layer.blendMode, "premultiplied")
+      setBlendMode(layer.blendMode, "premultiplied")
       love.graphics.draw(layer.canvas)
     end
 
@@ -690,7 +710,7 @@ local function drawLayerBatch(layerGroup)
     -- Process each effect group within this mask group
     for _, effectGroup in pairs(effectGroups) do
       -- Set blend mode for the group
-      love.graphics.setBlendMode(effectGroup.blendMode, "premultiplied")
+      setBlendMode(effectGroup.blendMode, "premultiplied")
 
       -- For layers with identical effects AND multiple layers, batch process them
       if effectGroup.effectsCount > 0 and #effectGroup.layers > 1 then
@@ -789,6 +809,8 @@ local function compositeLayersOnScreen(globalEffects, applyPersistentEffects)
 
   -- Store current blend mode
   local currentBlendMode, currentAlphaMode = love.graphics.getBlendMode()
+  state.currentRenderState.blendMode = currentBlendMode
+  state.currentRenderState.blendAlphaMode = currentAlphaMode
 
   -- Prepare composite - add stencil=true only if masks are used
   love.graphics.setCanvas({ state.layers.composite.canvas, stencil = anyActiveMasks })
@@ -872,7 +894,7 @@ local function compositeLayersOnScreen(globalEffects, applyPersistentEffects)
 
           -- Use premultiplied alpha when drawing canvases
           -- But respect the layer's blend mode
-          love.graphics.setBlendMode(layer.blendMode, "premultiplied")
+          setBlendMode(layer.blendMode, "premultiplied")
           state.specialLayerUsage.stateChanges = state.specialLayerUsage.stateChanges + 1
 
           -- Apply effects (or draw directly if no effects)
@@ -921,7 +943,7 @@ local function compositeLayersOnScreen(globalEffects, applyPersistentEffects)
   end
 
   -- Use premultiplied alpha when drawing the composite canvas to screen
-  love.graphics.setBlendMode("alpha", "premultiplied")
+  setBlendMode("alpha", "premultiplied")
 
   -- Apply effects (or draw directly if no effects)
   applyEffects(state.layers.composite.canvas, sharedEffectsTable)
@@ -930,7 +952,7 @@ local function compositeLayersOnScreen(globalEffects, applyPersistentEffects)
   love.graphics.translate(-state.offset_x, -state.offset_y)
 
   -- Restore original blend mode
-  love.graphics.setBlendMode(currentBlendMode, currentAlphaMode)
+  setBlendMode(currentBlendMode, currentAlphaMode)
 
   return true
 end
@@ -1192,7 +1214,9 @@ local shove = {
     state.specialLayerUsage.batchedLayers = 0
     state.specialLayerUsage.stateChanges = 0
     state.specialLayerUsage.batchedEffectOperations = 0
-    state.currentRenderState.shader = nil  -- Reset shader tracking
+    state.currentRenderState.shader = nil         -- Reset shader tracking
+    state.currentRenderState.blendMode = nil      -- Reset blend mode tracking
+    state.currentRenderState.blendAlphaMode = nil -- Reset alpha mode tracking
 
     -- Set flag to indicate we're in drawing mode
     state.inDrawMode = true
@@ -1350,6 +1374,8 @@ local shove = {
     -- Reset drawing mode flag and render state tracking
     state.inDrawMode = false
     state.currentRenderState.shader = nil
+    state.currentRenderState.blendMode = nil
+    state.currentRenderState.blendAlphaMode = nil
 
     shove.profiler.renderOverlay()
 
