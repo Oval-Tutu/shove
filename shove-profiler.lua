@@ -54,7 +54,17 @@ local shoveProfiler = {
     currentSizePreset = "default",
   },
   -- Metrics data containers
-  metrics = {},
+  metrics = {
+    -- Add this new structure for FPS tracking
+    fpsHistory = {
+      values = {},       -- Array of recent FPS values
+      maxSamples = 30,   -- Store 30 samples (about 6 seconds at 0.2s collection interval)
+      currentIndex = 1,  -- Current position in the circular buffer
+      sum = 0,           -- Running sum of stored values
+      count = 0,         -- Number of samples collected (up to maxSamples)
+      avgFps = 0         -- The calculated average FPS
+    }
+  },
   -- Particle system tracking
   particles = {
     count = 0,
@@ -233,6 +243,25 @@ local function setupMetricsCollector()
     shoveProfiler.metrics.memory = collectgarbage("count")
     shoveProfiler.metrics.stats = love.graphics.getStats()
 
+    local fpsHistory = shoveProfiler.metrics.fpsHistory
+    local currentFps = shoveProfiler.metrics.fps or 0
+    local oldValue = fpsHistory.values[fpsHistory.currentIndex] or 0
+
+    -- Update the running sum by adding new value and removing old one
+    fpsHistory.sum = fpsHistory.sum + currentFps - oldValue
+    fpsHistory.values[fpsHistory.currentIndex] = currentFps
+
+    -- Update count and index
+    if fpsHistory.count < fpsHistory.maxSamples then
+      fpsHistory.count = fpsHistory.count + 1
+    end
+    fpsHistory.currentIndex = fpsHistory.currentIndex % fpsHistory.maxSamples + 1
+
+    -- Calculate average
+    if fpsHistory.count > 0 then
+      fpsHistory.avgFps = fpsHistory.sum / fpsHistory.count
+    end
+
     -- Safely get Shöve state
     if shoveProfiler.shove and type(shoveProfiler.shove.getState) == "function" then
       shoveProfiler.metrics.state = shoveProfiler.shove.getState()
@@ -261,7 +290,9 @@ local function setupMetricsCollector()
     -- Build cached performance info
     cachedPerformanceInfo = {
       string.format("LÖVE %s ", shoveProfiler.metrics.loveVersion),
-      string.format("FPS: %.0f (%.1f ms) [vsync: %s]", shoveProfiler.metrics.fps or 0, frameTime, shoveProfiler.state.isVsyncEnabled and "on" or "off"),
+      string.format("FPS: %.0f (%.1f ms)", shoveProfiler.metrics.fps or 0, frameTime),
+      string.format("FPS: %.0f (average)", shoveProfiler.metrics.fpsHistory.avgFps or 0),
+      string.format("VSync: %s", shoveProfiler.state.isVsyncEnabled and "On" or "OFF"),
       string.format("Draw Calls: %d (%d batched)", stats.drawcalls or 0, stats.drawcallsbatched or 0),
       string.format("Canvases: %d (%d switches)", stats.canvases or 0, stats.canvasswitches or 0),
       string.format("Shader Switches: %d", stats.shaderswitches or 0),
