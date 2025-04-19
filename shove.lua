@@ -235,7 +235,7 @@ local function createLayer(layerName, options)
   end
 
   -- Determine if this is a special layer
-  local isSpecial = layerName == "_composite" or layerName == "_effects"
+  local isSpecial = layerName == "_composite"
 
   local layer = {
     name = layerName,
@@ -417,61 +417,71 @@ end
 ---@param effects love.Shader[] Array of shader effects
 local function applyEffects(canvas, effects)
   if not effects or #effects == 0 then
-    -- Already using premultiplied from caller
     love.graphics.draw(canvas)
     return
   end
 
-  local shader = love.graphics.getShader()
-  local currentBlendMode, currentAlphaMode = love.graphics.getBlendMode()
-
-  -- Set correct blend mode for canvas drawing
-  love.graphics.setBlendMode("alpha", "premultiplied")
-
   if #effects == 1 then
     love.graphics.setShader(effects[1])
     love.graphics.draw(canvas)
-    -- Track effects application
     state.specialLayerUsage.effectsApplied = state.specialLayerUsage.effectsApplied + 1
   else
     local _canvas = love.graphics.getCanvas()
 
-    -- Create transient effects canvas if needed
-    local fxLayer = state.layers.byName["_effects"]
-    if not fxLayer then
-      fxLayer = createLayer("_effects", { visible = false })
-      fxLayer.isSpecial = true
+    -- Ensure effect buffers exist and are correct size
+    if not fxCanvasA or fxCanvasA:getWidth() ~= state.viewport_width then
+      fxCanvasA = fxCanvasA or love.graphics.newCanvas(state.viewport_width, state.viewport_height)
+      fxCanvasB = fxCanvasB or love.graphics.newCanvas(state.viewport_width, state.viewport_height)
+
+      if fxCanvasA:getWidth() ~= state.viewport_width then
+        fxCanvasA:release()
+        fxCanvasB:release()
+        fxCanvasA = love.graphics.newCanvas(state.viewport_width, state.viewport_height)
+        fxCanvasB = love.graphics.newCanvas(state.viewport_width, state.viewport_height)
+      end
     end
-    -- Ensure the temporary canvas exists
-    ensureLayerCanvas(fxLayer)
-    local fxCanvas = fxLayer.canvas
 
     -- Track effects buffer switching
     state.specialLayerUsage.effectBufferSwitches = state.specialLayerUsage.effectBufferSwitches + 1
 
-    local outputCanvas
-    local inputCanvas
-
+    -- Only push/pop once
     love.graphics.push()
     love.graphics.origin()
+
+    -- Copy initial contents to first buffer
+    love.graphics.setCanvas(fxCanvasA)
+    love.graphics.clear()
+    love.graphics.setShader() -- Use default shader for the initial copy
+    love.graphics.draw(canvas)
+
+    local input = fxCanvasA
+    local output = fxCanvasB
+
+    -- Apply effects in sequence
     for i = 1, #effects do
-      inputCanvas = i % 2 == 1 and canvas or fxCanvas
-      outputCanvas = i % 2 == 0 and canvas or fxCanvas
-      love.graphics.setCanvas(outputCanvas)
+      love.graphics.setCanvas(output)
       love.graphics.clear()
       love.graphics.setShader(effects[i])
-      love.graphics.draw(inputCanvas)
-      love.graphics.setCanvas(inputCanvas)
-      -- Track effects application
+      love.graphics.draw(input)
+
+      -- Swap buffers for next pass
+      local temp = input
+      input = output
+      output = temp
+
       state.specialLayerUsage.effectsApplied = state.specialLayerUsage.effectsApplied + 1
     end
-    love.graphics.pop()
+
+    -- NOTE! Restore coordinate system BEFORE final drawing
     love.graphics.setCanvas(_canvas)
-    love.graphics.draw(outputCanvas)
+    love.graphics.setShader()
+    -- First restore the coordinate system
+    love.graphics.pop()
+    -- Then draw with proper transforms
+    love.graphics.draw(input)
   end
 
-  love.graphics.setShader(shader)
-  love.graphics.setBlendMode(currentBlendMode, currentAlphaMode)
+  love.graphics.setShader()
 end
 
 --- Begin drawing to a specific layer
@@ -1318,7 +1328,7 @@ local shove = {
     end
 
     -- Check for reserved names
-    if layerName == "_composite" or layerName == "_effects" then
+    if layerName == "_composite" then
       error("shove.createLayer: '"..layerName.."' is a reserved layer name", 2)
     end
 
