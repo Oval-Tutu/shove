@@ -142,18 +142,6 @@ local function ensureLayerCanvas(layer)
         layer.canvas = love.graphics.newCanvas(state.viewport_width, state.viewport_height, true) -- stencil=true
       else
         layer.canvas = love.graphics.newCanvas(state.viewport_width, state.viewport_height)
-        local function releaseLayerCanvas(layerName)
-          local layer = getLayer(layerName)
-          if not layer or not layer.canvas then
-            return false
-          end
-
-          -- Add to appropriate pool
-          local pool = layer.stencil and canvasPools.stencil or canvasPools.standard
-          table.insert(pool, layer.canvas)
-          layer.canvas = nil
-          return true
-        end
       end
     end
   end
