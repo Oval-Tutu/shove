@@ -578,7 +578,7 @@ local function drawLayerBatch(layerGroup)
 
   local layerCount = #layerGroup.layers
 
-  -- Skip unnecessary batching for single layers
+  -- Fast path for single layers
   if layerCount == 1 then
     local layer = layerGroup.layers[1]
     love.graphics.setBlendMode(layer.blendMode, "premultiplied")
@@ -586,7 +586,6 @@ local function drawLayerBatch(layerGroup)
 
     -- Apply mask if needed
     if layer.maskLayer and layer.maskLayerRef and layer.maskLayerRef.canvas then
-      -- Apply mask code...
       love.graphics.clear(false, false, true)
       love.graphics.stencil(function()
         love.graphics.setShader(state.maskShader)
@@ -608,85 +607,109 @@ local function drawLayerBatch(layerGroup)
     return
   end
 
-  -- For masked layers, process individually
-  if layerGroup.hasMask then
+  -- For layers without masks and effects, draw them directly
+  if not layerGroup.hasMask and layerGroup.effectsCount == 0 then
     for _, layer in ipairs(layerGroup.layers) do
-      -- Apply mask if needed
-      if layer.maskLayer then
-        -- Use the direct reference instead of looking up by name
-        local maskLayer = layer.maskLayerRef
-        if maskLayer and maskLayer.canvas then
-          -- Clear stencil buffer first
-          love.graphics.clear(false, false, true)
-          love.graphics.stencil(function()
-            -- Use mask shader to properly handle transparent pixels
-            love.graphics.setShader(state.maskShader)
-            love.graphics.draw(maskLayer.canvas)
-            love.graphics.setShader()
-          end, "replace", 1)
-          -- Only draw where stencil value equals 1
-          love.graphics.setStencilTest("equal", 1)
-          state.specialLayerUsage.stateChanges = state.specialLayerUsage.stateChanges + 1
-        end
-      end
-
-      -- Apply effects (or draw directly if no effects)
-      applyEffects(layer.canvas, layer.effects)
-
-      -- Reset stencil if used
-      if layer.maskLayer then
-        love.graphics.setStencilTest()
-        state.specialLayerUsage.stateChanges = state.specialLayerUsage.stateChanges + 1
-      end
-    end
-  -- For layers with identical effects, batch process them
-  elseif layerGroup.effectsCount > 0 then
-    local layerCount = #layerGroup.layers
-
-    -- Create batch canvas if needed
-    if not batchCanvas or batchCanvas:getWidth() ~= state.viewport_width or batchCanvas:getHeight() ~= state.viewport_height then
-      if batchCanvas then batchCanvas:release() end
-      batchCanvas = love.graphics.newCanvas(state.viewport_width, state.viewport_height)
-    end
-
-    -- Store current canvas
-    local currentCanvas = love.graphics.getCanvas()
-
-    -- Draw all layers to batch canvas
-    love.graphics.setCanvas(batchCanvas)
-    love.graphics.clear()
-
-    for _, layer in ipairs(layerGroup.layers) do
-      love.graphics.draw(layer.canvas)
-    end
-
-    -- Restore original canvas
-    love.graphics.setCanvas(currentCanvas)
-
-    -- Apply effects once to the combined batch
-    applyEffects(batchCanvas, layerGroup.effects)
-
-    -- Count batched effect operations
-    state.specialLayerUsage.batchedEffectOperations = state.specialLayerUsage.batchedEffectOperations +
-                                                     (layerCount - 1) * layerGroup.effectsCount
-
-    -- Count as a batch
-    state.specialLayerUsage.batchGroups = state.specialLayerUsage.batchGroups + 1
-    state.specialLayerUsage.batchedLayers = state.specialLayerUsage.batchedLayers + layerCount
-  else
-    -- For layers without masks and effects, draw them individually in z-index order
-    -- This preserves proper z-ordering within the batch
-    for _, layer in ipairs(layerGroup.layers) do
-      -- Set the blend mode for each layer, just to be safe
       love.graphics.setBlendMode(layer.blendMode, "premultiplied")
-      -- Draw the layer
       love.graphics.draw(layer.canvas)
     end
 
     -- Count as a batch
     state.specialLayerUsage.batchGroups = state.specialLayerUsage.batchGroups + 1
     state.specialLayerUsage.batchedLayers = state.specialLayerUsage.batchedLayers + #layerGroup.layers
+    return
   end
+
+  -- Create or update batch canvas if needed for effect batching
+  if not batchCanvas or batchCanvas:getWidth() ~= state.viewport_width or batchCanvas:getHeight() ~= state.viewport_height then
+    if batchCanvas then batchCanvas:release() end
+    batchCanvas = love.graphics.newCanvas(state.viewport_width, state.viewport_height)
+  end
+
+  -- Group layers by mask
+  local maskGroups = {}
+  for _, layer in ipairs(layerGroup.layers) do
+    local maskKey = layer.maskLayer or "none"
+    maskGroups[maskKey] = maskGroups[maskKey] or {}
+    table.insert(maskGroups[maskKey], layer)
+  end
+
+  -- Process each mask group
+  for maskName, layers in pairs(maskGroups) do
+    -- Set up mask once if needed
+    if maskName ~= "none" then
+      local maskLayer = getLayer(maskName)
+      if maskLayer and maskLayer.canvas then
+        love.graphics.clear(false, false, true)
+        love.graphics.stencil(function()
+          love.graphics.setShader(state.maskShader)
+          love.graphics.draw(maskLayer.canvas)
+          love.graphics.setShader()
+        end, "replace", 1)
+        love.graphics.setStencilTest("equal", 1)
+        state.specialLayerUsage.stateChanges = state.specialLayerUsage.stateChanges + 1
+      end
+    end
+
+    -- Within each mask group, group by effect signature for further batching
+    local effectGroups = {}
+    for _, layer in ipairs(layers) do
+      local signature = getLayerSignature(layer)
+      effectGroups[signature] = effectGroups[signature] or {
+        layers = {},
+        effects = layer.effects,
+        effectsCount = #layer.effects,
+        blendMode = layer.blendMode
+      }
+      table.insert(effectGroups[signature].layers, layer)
+    end
+
+    -- Process each effect group within this mask group
+    for _, effectGroup in pairs(effectGroups) do
+      -- Set blend mode for the group
+      love.graphics.setBlendMode(effectGroup.blendMode, "premultiplied")
+
+      -- For layers with identical effects AND multiple layers, batch process them
+      if effectGroup.effectsCount > 0 and #effectGroup.layers > 1 then
+        -- Store current canvas
+        local currentCanvas = love.graphics.getCanvas()
+
+        -- Draw all layers to batch canvas
+        love.graphics.setCanvas(batchCanvas)
+        love.graphics.clear()
+
+        for _, layer in ipairs(effectGroup.layers) do
+          love.graphics.draw(layer.canvas)
+        end
+
+        -- Restore original canvas
+        love.graphics.setCanvas(currentCanvas)
+
+        -- Apply effects once to the combined batch
+        applyEffects(batchCanvas, effectGroup.effects)
+
+        -- Count batched effect operations
+        state.specialLayerUsage.batchedEffectOperations =
+          state.specialLayerUsage.batchedEffectOperations +
+          (#effectGroup.layers - 1) * effectGroup.effectsCount
+      else
+        -- For single layers or layers with unique effects, process individually
+        for _, layer in ipairs(effectGroup.layers) do
+          applyEffects(layer.canvas, layer.effects)
+        end
+      end
+    end
+
+    -- Reset stencil only once after processing all layers with this mask
+    if maskName ~= "none" then
+      love.graphics.setStencilTest()
+      state.specialLayerUsage.stateChanges = state.specialLayerUsage.stateChanges + 1
+    end
+  end
+
+  -- Count as a batch
+  state.specialLayerUsage.batchGroups = state.specialLayerUsage.batchGroups + 1
+  state.specialLayerUsage.batchedLayers = state.specialLayerUsage.batchedLayers + #layerGroup.layers
 end
 
 --- Composite all layers to screen
