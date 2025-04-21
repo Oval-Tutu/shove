@@ -52,6 +52,9 @@ local shoveProfiler = {
     lastCollectionTime = 0,
     lastEventPushTime = 0,
     currentSizePreset = "default",
+    overlayCanvas = nil,
+    overlayNeedsUpdate = true,
+    lastOverlayContentHash = "",
   },
   -- Metrics data containers
   metrics = {
@@ -115,6 +118,26 @@ local cachedShoveInfo = {}
 ---@type string[]
 local cachedLayerInfo = {}
 
+
+--- Check if content has changed
+--- @return boolean changed True if content has changed
+local function hasContentChanged()
+  -- Create a simple hash of the current content
+  local hash =  tostring(#cachedPerformanceInfo) ..
+                tostring(#cachedShoveInfo) ..
+                tostring(#cachedLayerInfo)
+
+  -- Check if content has changed
+  local changed = hash ~= shoveProfiler.state.lastOverlayContentHash
+
+  -- Update the stored hash
+  if changed then
+    shoveProfiler.state.lastOverlayContentHash = hash
+  end
+
+  return changed
+end
+
 --- Update panel dimensions based on current metrics data
 ---@return nil
 local function updatePanelDimensions()
@@ -151,6 +174,8 @@ end
 ---@return nil
 local function toggleSizePreset()
   if not shoveProfiler.state.isOverlayVisible then return end
+
+  shoveProfiler.state.overlayNeedsUpdate = true
 
   -- Toggle between default and large
   local newPreset = shoveProfiler.state.currentSizePreset == "default" and "large" or "default"
@@ -467,63 +492,102 @@ end
 --- Display performance metrics and profiling information
 ---@return nil
 function shoveProfiler.renderOverlay()
-  -- Save current graphics state
-  local r, g, b, a = love.graphics.getColor()
-  local font = love.graphics.getFont()
-  local blendMode, blendAlphaMode = love.graphics.getBlendMode()
+  -- Skip rendering if overlay isn't visible
+  if not (shoveProfiler.state.isOverlayVisible or shoveProfiler.state.isFpsOverlayVisible) then
+    return
+  end
 
-  -- First, render the full overlay if it's visible
-  if shoveProfiler.state.isOverlayVisible then
-    love.graphics.setFont(shoveProfiler.config.font)
+  -- Update metrics at appropriate intervals
+  local currentTime = love.timer.getTime()
+  local pushInterval = shoveProfiler.config.collectionInterval * 2
+  if currentTime - shoveProfiler.state.lastEventPushTime >= pushInterval then
+    love.event.push("shove_collect_metrics")
+    shoveProfiler.state.lastEventPushTime = currentTime
+    shoveProfiler.state.overlayNeedsUpdate = true
+  end
 
-    -- Get panel dimensions from config
-    local panel = shoveProfiler.config.panel
-    local area = shoveProfiler.input.touch.overlayArea
-    local renderX = area.x + panel.padding
-    local renderY = area.y + panel.padding
+  -- For minimal FPS overlay, we can directly render it (simple enough)
+  if shoveProfiler.state.isFpsOverlayVisible and not shoveProfiler.state.isOverlayVisible then
+    -- Save graphics state
+    local r, g, b, a = love.graphics.getColor()
+    local font = love.graphics.getFont()
 
-    -- Panel background
-    love.graphics.setColor(0, 0, 0, 0.75)
-    love.graphics.rectangle("fill", area.x, area.y, panel.width, panel.height)
-    -- Panel Border
-    love.graphics.setColor(shoveProfiler.config.colors.midGray)
-    love.graphics.rectangle("line", area.x, area.y, panel.width, panel.height)
-
-    -- Render sections
-    renderY = renderInfoSection(cachedHardwareInfo, renderX, renderY, shoveProfiler.config.colors.blue)
-    renderY = renderInfoSection(cachedPerformanceInfo, renderX, renderY, shoveProfiler.config.colors.blue)
-    renderY = renderInfoSection(cachedShoveInfo, renderX, renderY, shoveProfiler.config.colors.purple)
-    renderY = renderLayerInfo(renderX, renderY)
-  elseif shoveProfiler.state.isFpsOverlayVisible then
-    -- Render minimal FPS overlay if enabled
+    -- Render the FPS counter
     love.graphics.setFont(shoveProfiler.config.fonts["large"])
     local frameTime = love.timer.getDelta() * 1000
-    local fpsText = string.format("FPS: %.0f (%.1f ms)",
-                                  shoveProfiler.metrics.fps or 0,
-                                  frameTime)
+    local fpsText = string.format("FPS: %.0f (%.1f ms)", shoveProfiler.metrics.fps or 0, frameTime)
 
-    -- Position in top-right corner with some padding
     local textWidth = shoveProfiler.config.fonts["large"]:getWidth(fpsText)
     local x = love.graphics.getWidth() - textWidth - 10
     local y = 10
 
     love.graphics.setColor(shoveProfiler.config.colors.orange)
     love.graphics.print(fpsText, x, y)
-  end
-  -- Restore graphics state
-  love.graphics.setColor(r, g, b, a)
-  love.graphics.setFont(font)
-  love.graphics.setBlendMode(blendMode, blendAlphaMode)
 
-  -- Time-based throttle synchronized with collection interval
-  if shoveProfiler.state.isOverlayVisible or shoveProfiler.state.isFpsOverlayVisible then
-    local currentTime = love.timer.getTime()
-    -- Push at half the rate (twice the interval)
-    local pushInterval = shoveProfiler.config.collectionInterval * 2
-    if currentTime - shoveProfiler.state.lastEventPushTime >= pushInterval then
-      love.event.push("shove_collect_metrics")
-      shoveProfiler.state.lastEventPushTime = currentTime
+    -- Restore graphics state
+    love.graphics.setColor(r, g, b, a)
+    love.graphics.setFont(font)
+
+    return
+  end
+
+  -- Only for full overlay: check if we need to update the canvas
+  if shoveProfiler.state.isOverlayVisible then
+    -- Create canvas if it doesn't exist or if dimensions changed
+    local panel = shoveProfiler.config.panel
+    local area = shoveProfiler.input.touch.overlayArea
+
+    -- First check if we need a new canvas (wrong size or doesn't exist)
+    local needsNewCanvas = not shoveProfiler.state.overlayCanvas or
+      shoveProfiler.state.overlayCanvas:getWidth() ~= panel.width or
+      shoveProfiler.state.overlayCanvas:getHeight() ~= panel.height
+
+    -- Then check if we need to update the content (which includes needing a new canvas)
+    local needsContentUpdate = needsNewCanvas or
+      shoveProfiler.state.overlayNeedsUpdate or
+      hasContentChanged()
+
+    -- Handle the canvas creation/update as needed
+    if needsContentUpdate then
+      -- Create a new canvas if required
+      if needsNewCanvas then
+        shoveProfiler.state.overlayCanvas = love.graphics.newCanvas(panel.width, panel.height)
+      end
+
+      -- Render to canvas
+      love.graphics.push("all")
+      love.graphics.setCanvas(shoveProfiler.state.overlayCanvas)
+      love.graphics.clear(0, 0, 0, 0.75)
+
+      -- Save canvas origin for proper rendering
+      love.graphics.origin()
+
+      -- Set font
+      love.graphics.setFont(shoveProfiler.config.font)
+
+      -- Draw border
+      love.graphics.setColor(shoveProfiler.config.colors.midGray)
+      love.graphics.rectangle("line", 0, 0, panel.width, panel.height)
+
+      -- Render content sections to canvas
+      local renderX = panel.padding
+      local renderY = panel.padding
+
+      renderY = renderInfoSection(cachedHardwareInfo, renderX, renderY, shoveProfiler.config.colors.blue)
+      renderY = renderInfoSection(cachedPerformanceInfo, renderX, renderY, shoveProfiler.config.colors.blue)
+      renderY = renderInfoSection(cachedShoveInfo, renderX, renderY, shoveProfiler.config.colors.purple)
+      renderY = renderLayerInfo(renderX, renderY)
+
+      -- Restore rendering state
+      love.graphics.pop()
+
+      -- Mark canvas as updated
+      shoveProfiler.state.overlayNeedsUpdate = false
     end
+
+    -- Draw the cached canvas
+    love.graphics.setColor(1, 1, 1, 1)
+    love.graphics.draw(shoveProfiler.state.overlayCanvas, area.x, area.y)
   end
 end
 
