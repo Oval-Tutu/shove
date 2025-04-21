@@ -46,8 +46,7 @@ local shoveProfiler = {
   },
   -- State for overlay visibility and tracking
   state = {
-    isOverlayVisible = false,
-    isFpsOverlayVisible = false,
+    overlayMode = "none", -- Can be "none", "fps", or "full"
     isVsyncEnabled = love.window.getVSync(),
     lastCollectionTime = 0,
     lastEventPushTime = 0,
@@ -173,7 +172,7 @@ end
 --- Toggle between size presets
 ---@return nil
 local function toggleSizePreset()
-  if not shoveProfiler.state.isOverlayVisible then return end
+  if shoveProfiler.state.overlayMode ~= "full" then return end
 
   shoveProfiler.state.overlayNeedsUpdate = true
 
@@ -493,7 +492,7 @@ end
 ---@return nil
 function shoveProfiler.renderOverlay()
   -- Skip rendering if overlay isn't visible
-  if not (shoveProfiler.state.isOverlayVisible or shoveProfiler.state.isFpsOverlayVisible) then
+  if shoveProfiler.state.overlayMode == "none" then
     return
   end
 
@@ -507,7 +506,7 @@ function shoveProfiler.renderOverlay()
   end
 
   -- For minimal FPS overlay, we can directly render it (simple enough)
-  if shoveProfiler.state.isFpsOverlayVisible and not shoveProfiler.state.isOverlayVisible then
+  if shoveProfiler.state.overlayMode == "fps" then
     -- Save graphics state
     local r, g, b, a = love.graphics.getColor()
     local font = love.graphics.getFont()
@@ -527,12 +526,7 @@ function shoveProfiler.renderOverlay()
     -- Restore graphics state
     love.graphics.setColor(r, g, b, a)
     love.graphics.setFont(font)
-
-    return
-  end
-
-  -- Only for full overlay: check if we need to update the canvas
-  if shoveProfiler.state.isOverlayVisible then
+  elseif shoveProfiler.state.overlayMode == "full" then
     -- Create canvas if it doesn't exist or if dimensions changed
     local panel = shoveProfiler.config.panel
     local area = shoveProfiler.input.touch.overlayArea
@@ -591,34 +585,24 @@ function shoveProfiler.renderOverlay()
   end
 end
 
---- Toggle the visibility of the profiler overlay
+--- Toggle the overlay visibility
+---@param requestedMode? string mode to toggle ("fps" or "full")
 ---@return nil
-local function toggleOverlay()
-  -- If FPS overlay is visible, hide it first
-  if shoveProfiler.state.isFpsOverlayVisible then
-    shoveProfiler.state.isFpsOverlayVisible = false
+local function toggleOverlay(requestedMode)
+  -- add tpye checking
+  if requestedMode ~= "fps" and requestedMode ~= "full" and requestedMode ~= "none" then
+    print("Error: Invalid overlay mode requested")
+    return
   end
 
-  -- Toggle main overlay
-  shoveProfiler.state.isOverlayVisible = not shoveProfiler.state.isOverlayVisible
-  if shoveProfiler.state.isOverlayVisible then
-    shoveProfiler.state.lastCollectionTime = 0
-    love.event.push("shove_collect_metrics")
-  end
-end
-
---- Toggle the visibility of the minimal FPS overlay
----@return nil
-local function toggleFpsOverlay()
-  -- If main overlay is visible, hide it first
-  if shoveProfiler.state.isOverlayVisible then
-    shoveProfiler.state.isOverlayVisible = false
+  if shoveProfiler.state.overlayMode == requestedMode then
+    shoveProfiler.state.overlayMode = "none"
+  else
+    shoveProfiler.state.overlayMode = requestedMode
   end
 
-  -- Toggle FPS overlay
-  shoveProfiler.state.isFpsOverlayVisible = not shoveProfiler.state.isFpsOverlayVisible
-  if shoveProfiler.state.isFpsOverlayVisible then
-    -- Ensure metrics are collected for display
+  -- Collect metrics immediately if we're turning on an overlay
+  if shoveProfiler.state.overlayMode ~= "none" then
     shoveProfiler.state.lastCollectionTime = 0
     love.event.push("shove_collect_metrics")
   end
@@ -627,7 +611,7 @@ end
 --- Toggle VSync on/off
 ---@return nil
 local function toggleVSync()
-  if not (shoveProfiler.state.isOverlayVisible or shoveProfiler.state.isFpsOverlayVisible) then
+  if shoveProfiler.state.overlayMode == "none" then
     return
   end
 
@@ -640,7 +624,7 @@ end
 ---@param y number Touch y-coordinate
 ---@return boolean isOnBorder True if touch is on the panel border
 local function isTouchOnPanelBorder(x, y)
-  if not shoveProfiler.state.isOverlayVisible then return false end
+  if shoveProfiler.state.overlayMode ~= "full" then return false end
   if type(x) ~= "number" or type(y) ~= "number" then return false end
 
   local area = shoveProfiler.input.touch.overlayArea
@@ -705,7 +689,7 @@ function shoveProfiler.gamepadpressed(joystick, button)
   -- Toggle overlay with Select + A/Cross
   if (button == "back" and joystick:isGamepadDown("a")) or
      (button == "a" and joystick:isGamepadDown("back")) then
-     toggleOverlay()
+     toggleOverlay("full")
   end
   -- Toggle VSync with Select + B/Circle
   if (button == "back" and joystick:isGamepadDown("b")) or
@@ -720,7 +704,7 @@ function shoveProfiler.gamepadpressed(joystick, button)
   -- Toggle FPS overlay with Select + X/Square
   if (button == "back" and joystick:isGamepadDown("x")) or
      (button == "x" and joystick:isGamepadDown("back")) then
-      toggleFpsOverlay()
+      toggleOverlay("fps")
   end
 end
 
@@ -736,13 +720,13 @@ function shoveProfiler.keypressed(key)
   if (love.keyboard.isDown("lctrl") or love.keyboard.isDown("rctrl") or
       love.keyboard.isDown("lgui") or love.keyboard.isDown("rgui")) and
      key == "p" then
-    toggleOverlay()
+    toggleOverlay("full")
   end
   -- Toggle FPS overlay with Ctrl+t or Cmd+t
   if (love.keyboard.isDown("lctrl") or love.keyboard.isDown("rctrl") or
       love.keyboard.isDown("lgui") or love.keyboard.isDown("rgui")) and
      key == "t" then
-    toggleFpsOverlay()
+    toggleOverlay("fps")
   end
   -- Toggle VSync with Ctrl+V or Cmd+V
   if (love.keyboard.isDown("lctrl") or love.keyboard.isDown("rctrl") or
@@ -790,7 +774,7 @@ function shoveProfiler.touchpressed(id, x, y)
   -- Handle other touch interactions
   local timeSinceLastTap = currentTime - shoveProfiler.input.touch.lastTapTime
 
-  if shoveProfiler.state.isOverlayVisible and isTouchInsideOverlay(x, y) then
+  if shoveProfiler.state.overlayMode == "full" and isTouchInsideOverlay(x, y) then
     -- Handle touches inside the active overlay
     if timeSinceLastTap <= shoveProfiler.input.touch.doubleTapThreshold then
       toggleVSync()
@@ -803,7 +787,7 @@ function shoveProfiler.touchpressed(id, x, y)
     if currentTime - shoveProfiler.input.touch.lastCornerTapTime <= shoveProfiler.input.touch.tripleTapThreshold then
       shoveProfiler.input.touch.cornerTaps = shoveProfiler.input.touch.cornerTaps + 1
       if shoveProfiler.input.touch.cornerTaps >= 3 then
-        toggleFpsOverlay()
+        toggleOverlay("fps")
         shoveProfiler.input.touch.cornerTaps = 0
         shoveProfiler.input.touch.lastCornerTapTime = 0
       else
@@ -815,9 +799,9 @@ function shoveProfiler.touchpressed(id, x, y)
       shoveProfiler.input.touch.lastCornerTapTime = currentTime
     end
 
-    -- Toggle overlay with double-tap in corner (separate from triple tap)
+    -- Toggle full overlay with double-tap in corner (separate from triple tap)
     if timeSinceLastTap <= shoveProfiler.input.touch.doubleTapThreshold then
-      toggleOverlay()
+      toggleOverlay("full")
       shoveProfiler.input.touch.lastTapTime = 0
     else
       shoveProfiler.input.touch.lastTapTime = currentTime
