@@ -952,6 +952,35 @@ end
 
 #### Profiler Performance Considerations
 
+The Shöve profiler has been highly optimized to have negligible performance impact, even at very high frame rates. This is achieved through several key optimizations:
+
+- **Unified Canvas Resource Management**: Both overlay modes share a single canvas resource (`overlayCanvas`), intelligently reallocating only when necessary due to dimension changes
+- **Targeted Content Change Detection**: The profiler only triggers redraws when actual meaningful data changes, using content hashing tailored to each overlay type
+- **Event-Driven Metrics Collection**: Metrics are collected through the `shove_collect_metrics` event at controlled intervals rather than every frame
+- **Efficient Drawing Pipeline**: Graphics state changes are batched and minimized during rendering operations
+- **Selective Update Strategy**: 
+  - FPS overlay only updates when the FPS value changes
+  - Full overlay updates when any of its displayed metrics change
+
+#### How Metrics Collection Works
+
+The implementation uses an event-driven approach where:
+
+1. The `shove_collect_metrics` event is pushed periodically during rendering (every `collectionInterval * 2` seconds)
+2. When triggered, this event handler:
+   - Updates all performance metrics (FPS, memory usage, draw calls, etc.)
+   - Constructs content hashes specific to each overlay type
+   - Sets the `overlayNeedsUpdate` flag only when content has meaningfully changed
+   - Updates cached text information to avoid string formatting during rendering
+
+This approach ensures metrics are collected at a controlled rate independent of frame rate, while the rendering system efficiently manages when canvas redraws are necessary.
+
+Due to these optimizations, the impact is effectively unmeasurable in typical usage scenarios. The profiler can be left enabled during development without concern for performance degradation.
+
+You can still remove the profiler module entirely as described below.
+
+#### Profiler Performance Considerations
+
 When running at very high frame rates (many hundred of FPS), the profiler itself introduces a small but measurable performance overhead.
 In our testing we observed the profiler's impact to be approximately 2% to 4% of total FPS.
 This overhead comes from the additional calculations, memory access, and UI rendering that the profiler performs to track and display metrics.
