@@ -1833,9 +1833,25 @@ local shove = {
 
   --- Return a copy of relevant state data for profiler metrics
   getState = function()
-    -- Initialize complete table structure once
+    -- Initialize cache if it doesn't exist
     if not shove._stateCache then
+      -- Create the cache structure once
       shove._stateCache = {
+        -- Basic state information
+        fitMethod = state.fitMethod,
+        renderMode = state.renderMode,
+        scalingFilter = state.scalingFilter,
+        screen_width = state.screen_width,
+        screen_height = state.screen_height,
+        viewport_width = state.viewport_width,
+        viewport_height = state.viewport_height,
+        rendered_width = state.rendered_width,
+        rendered_height = state.rendered_height,
+        scale_x = state.scale_x,
+        scale_y = state.scale_y,
+        offset_x = state.offset_x,
+        offset_y = state.offset_y,
+        -- Layer summary data
         layers = {
           ordered = {},
           count = 0,
@@ -1844,33 +1860,19 @@ local shove = {
           special_layer_count = 0,
           active = nil
         },
+        -- Special layer usage
         specialLayerUsage = {
           compositeSwitches = 0,
           effectsApplied = 0,
         },
-        global_effects_count = 0,
-        -- Pre-initialize all scalar properties
-        fitMethod = "",
-        renderMode = "",
-        scalingFilter = "",
-        screen_width = 0,
-        screen_height = 0,
-        viewport_width = 0,
-        viewport_height = 0,
-        rendered_width = 0,
-        rendered_height = 0,
-        scale_x = 0,
-        scale_y = 0,
-        offset_x = 0,
-        offset_y = 0
+        -- Global effects
+        global_effects_count = 0
       }
-      shove._layerInfoCache = {}
     end
 
     local result = shove._stateCache
-    local persistentLayerInfo = shove._layerInfoCache
 
-    -- Update basic state variables (always needed)
+    -- Update basic state information (always changes)
     result.fitMethod = state.fitMethod
     result.renderMode = state.renderMode
     result.scalingFilter = state.scalingFilter
@@ -1885,104 +1887,82 @@ local shove = {
     result.offset_x = state.offset_x
     result.offset_y = state.offset_y
 
-    -- Calculate global effects count if composite layer exists
-    local globalEffectsCount = 0
+    -- Calculate global effects count
     if state.layers.composite and state.layers.composite.effects then
-      globalEffectsCount = #state.layers.composite.effects
+      result.global_effects_count = #state.layers.composite.effects
+    else
+      result.global_effects_count = 0
     end
-    result.global_effects_count = globalEffectsCount
 
-    -- Only compute layer info if in layer render mode
+    -- Only process layer data in layer render mode
     if state.renderMode == "layer" then
-      local layers = result.layers
       local orderedLayers = state.layers.ordered
       local layerCount = #orderedLayers
 
-      -- Track counts in a single pass
-      local canvasCount, maskCount, specialLayerCount = 0, 0, 0
+      -- Reset counters
+      result.layers.count = layerCount
+      result.layers.canvas_count = 0
+      result.layers.mask_count = 0
+      result.layers.special_layer_count = 0
 
-      -- Use the pre-created ordered array
-      local orderedLayerInfo = layers.ordered
-
-      -- Process layers
+      -- Process layers and collect metrics
       for i = 1, layerCount do
         local layer = orderedLayers[i]
 
-        -- Count special counters
-        if layer.canvas ~= nil then canvasCount = canvasCount + 1 end
-        if layer.isUsedAsMask then maskCount = maskCount + 1 end
-        if layer.isSpecial then specialLayerCount = specialLayerCount + 1 end
-
-        -- Ensure the layerInfo table exists for this index
-        if not persistentLayerInfo[i] then
-          persistentLayerInfo[i] = {
-            name = "",
-            zIndex = 0,
-            visible = false,
-            blendMode = "",
-            blendAlphaMode = "",
-            hasCanvas = false,
-            isSpecial = false,
-            effects = 0,
-            isUsedAsMask = false
-          }
+        -- Count special properties
+        if layer.canvas ~= nil then
+          result.layers.canvas_count = result.layers.canvas_count + 1
+        end
+        if layer.isUsedAsMask then
+          result.layers.mask_count = result.layers.mask_count + 1
+        end
+        if layer.isSpecial then
+          result.layers.special_layer_count = result.layers.special_layer_count + 1
         end
 
-        local layerInfo = persistentLayerInfo[i]
+        -- Reuse or create layer info object
+        if not result.layers.ordered[i] then
+          result.layers.ordered[i] = {}
+        end
 
-        -- Update layer info (only what's needed for debug)
+        -- Update layer info
+        local layerInfo = result.layers.ordered[i]
         layerInfo.name = layer.name
         layerInfo.zIndex = layer.zIndex
         layerInfo.visible = layer.visible
-        layerInfo.blendMode = layer.blendMode
-        layerInfo.blendAlphaMode = layer.blendAlphaMode
         layerInfo.hasCanvas = layer.canvas ~= nil
         layerInfo.isSpecial = layer.isSpecial
         layerInfo.effects = #layer.effects
-        -- Include mask information for profiler display
         layerInfo.isUsedAsMask = layer.isUsedAsMask or false
-
-        -- Add to result array
-        orderedLayerInfo[i] = layerInfo
       end
 
-      -- Clean up any extra entries in both caches
-      for i = layerCount + 1, #orderedLayerInfo do
-        orderedLayerInfo[i] = nil
+      -- Clear out any extra cached layers if number of layers decreased
+      for i = layerCount + 1, #result.layers.ordered do
+        result.layers.ordered[i] = nil
       end
 
-      for i = layerCount + 1, #persistentLayerInfo do
-        persistentLayerInfo[i] = nil
-      end
+      -- Set active layer name
+      result.layers.active = state.layers.active and state.layers.active.name or nil
 
-      -- Update layer summary info
-      layers.count = layerCount
-      layers.canvas_count = canvasCount
-      layers.mask_count = maskCount
-      layers.special_layer_count = specialLayerCount
-      layers.active = state.layers.active and state.layers.active.name or nil
-
-      -- Update special layer usage
-      local usage = result.specialLayerUsage
-      usage.compositeSwitches = state.specialLayerUsage.compositeSwitches
-      usage.effectsApplied = state.specialLayerUsage.effectsApplied
+      -- Copy usage counters
+      result.specialLayerUsage.compositeSwitches = state.specialLayerUsage.compositeSwitches
+      result.specialLayerUsage.effectsApplied = state.specialLayerUsage.effectsApplied
     else
-      -- Just reset values without destroying tables when not in layer render mode
+      -- Reset layer data when not in layer mode
       result.layers.count = 0
       result.layers.canvas_count = 0
       result.layers.mask_count = 0
       result.layers.special_layer_count = 0
       result.layers.active = nil
 
-      -- Clear the ordered array without destroying it
+      -- Clear ordered layers array
       for i = 1, #result.layers.ordered do
         result.layers.ordered[i] = nil
       end
 
-      -- Reset usage counters without destroying the table
-      local usage = result.specialLayerUsage
-      usage.compositeSwitches = 0
-      usage.effectsApplied = 0
+      -- Reset usage counters
+      result.specialLayerUsage.compositeSwitches = 0
+      result.specialLayerUsage.effectsApplied = 0
     end
 
     return result
