@@ -937,13 +937,6 @@ function love.draw()
 end
 ```
 
-When evaluating batch processing impact, pay attention to:
-
-1. **State Changes**: Fewer is better, especially on mobile
-2. **Batch Groups**: Number of layer groups with similar properties
-3. **Batched Layers**: Total layers processed in batches
-4. **Batched Effect Operations**: How many effect applications were optimized
-
 #### Profiler Controls
 
 - **Keyboard:** <kbd>Ctrl</kbd> + <kbd>P</kbd> to toggle overlay
@@ -960,8 +953,8 @@ When evaluating batch processing impact, pay attention to:
 #### Profiler Performance Considerations
 
 When running at very high frame rates (many hundred of FPS), the profiler itself introduces a small but measurable performance overhead.
-In our testing we observed the profiler's impact to be approximately 1.2% to 1.5% of total FPS.
-This overhead comes from the additional calculations, memory access, and UI rendering that the profiler performs each frame to track and display metrics.
+In our testing we observed the profiler's impact to be approximately 2% to 4% of total FPS.
+This overhead comes from the additional calculations, memory access, and UI rendering that the profiler performs to track and display metrics.
 
 For most development scenarios, this minimal impact won't affect your workflow. However, when performing precise performance benchmarking or optimization on high-end systems, consider temporarily disabling the profiler by using the toggle shortcut (<kbd>Ctrl</kbd> + <kbd>P</kbd>) or removing the profiler module entirely for the most accurate measurements.
 
@@ -971,60 +964,31 @@ The profiler is implemented in a separate file (`shove-profiler.lua`) so you can
 Remove profiler file in your production builds and Shöve will automatically detect its absence and use a no-op stub implementation.
 This approach ensures that the profiler adds zero overhead to your game in production releases while exposing useful tooling during development.
 
-## Optimizing Layer Rendering
+## Layer Rendering Performance
 
-Shöve implements several sophisticated rendering optimizations that can help improve performance when using layer-based rendering. These optimizations focus on reducing state changes and minimizing draw calls.
+Shöve's layer-based rendering system is designed to work effectively with LÖVE's built-in optimizations:
 
-### Key Optimizations
+### LÖVE's Built-in Optimizations
 
-#### Layer Batching
+LÖVE automatically optimizes rendering in several ways:
 
-The core optimization in Shöve is layer batching, which:
+1. **Draw Call Batching**: Similar drawing operations are automatically batched when possible
+2. **Texture Atlas Management**: Efficient handling of sprite sheets and image data
+3. **State Change Minimization**: LÖVE tracks rendering state to minimize expensive changes
 
-1. **Groups similar layers** based on shared properties (blend mode, effects, masks)
-2. **Processes effects in batches** to reduce shader switches
-3. **Minimizes state changes** by setting blend modes once per batch
-4. **Optimizes memory usage** with persistent table reuse
+### Shöve's Layer Approach
 
-These optimizations are particularly valuable for:
-- Games with many layers using the same blend mode
-- Scenes with multiple layers sharing identical effects
-- Lower-end hardware where state changes are expensive
-- Mobile devices where reducing draw calls improves battery life
+Shöve complements these optimizations by:
 
-### Controlling Batch Processing
+1. **Maintaining Proper Draw Order**: Ensuring layers are drawn in the correct z-order
+2. **Minimizing State Changes**: Setting blend modes and shaders only when they change
+3. **Canvas Pooling**: Reusing canvas objects to reduce memory allocation
+4. **Effect Application**: Applying shader effects efficiently to entire layers
 
-Batch processing is enabled by default for layer-based render but can be toggled at runtime:
+The profiler displays metrics that can help you understand your application's rendering performance, including:
 
-```lua
--- Disable batch processing
-local previousState = shove.setLayerBatching(false)
-
--- Check current batch processing state
-local batchingEnabled = shove.getLayerBatching()
-
--- Re-enable batch processing
-shove.setLayerBatching(true)
-```
-
-#### When to Disable Batching
-
-Despite its benefits, batch processing adds some CPU overhead. Consider disabling it when:
-
-- Your game has very few layers (less than 3-4)
-- Layers have unique blend modes or effects (no batching opportunities)
-- You're CPU-bound rather than GPU-bound
-- Profiler metrics show no significant reduction in state changes
-
-#### Testing Your Specific Case
-
-Since rendering performance is highly dependent on your specific game and target hardware, use the profiler to test both modes:
-1. Run your game with default settings (batching enabled)
-2. Note the FPS and state change metrics
-3. Disable batching: `shove.setLayerBatching(false)`
-4. Compare metrics to determine the best configuration
-
-The ideal setting varies by game, so let your profiler results guide your decision rather than assuming one approach is always better.
+- **Effects Applied**: Number of shader effects applied to layers
+- **Composite Operations**: Number of times layers were composited together
 
 ## API Reference
 
