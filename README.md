@@ -76,13 +76,18 @@ Run `love demo/` to explore all demos. Use <kbd>SPACE</kbd> to cycle through exa
 
 Each demo showcases different Shöve capabilities:
 - [**low-res**](https://github.com/Oval-Tutu/shove/blob/main/demo/low-res/init.lua):: Pixel-perfect scaling with a tiny 64x64 resolution
+- [**mouse-input**](https://github.com/Oval-Tutu/shove/blob/main/demo/mouse-input/init.lua): Convert between screen and viewport coordinates
 - [**single-shader**](https://github.com/Oval-Tutu/shove/blob/main/demo/single-shader/init.lua): Apply shaders to specific layers
 - [**multiple-shaders**](https://github.com/Oval-Tutu/shove/blob/main/demo/multiple-shaders/init.lua): Chain multiple effects
-- [**mouse-input**](https://github.com/Oval-Tutu/shove/blob/main/demo/mouse-input/init.lua): Convert between screen and viewport coordinates
 - [**canvases-shaders**](https://github.com/Oval-Tutu/shove/blob/main/demo/canvases-shaders/init.lua): Apply different effects to different layers
+- [**user-canvas-direct**](https://github.com/Oval-Tutu/shove/blob/main/demo/user-canvas-direct/init.lua): Seamlessly integrate custom canvases within direct rendering mode
+- [**user-canvas-layer**](https://github.com/Oval-Tutu/shove/blob/main/demo/user-canvas-layer/init.lua): Use custom canvases while preserving layer state in layer rendering mode
 - [**stencil**](https://github.com/Oval-Tutu/shove/blob/main/demo/stencil/init.lua): Use stencil buffers with layers
 - [**mask**](https://github.com/Oval-Tutu/shove/blob/main/demo/mask/init.lua): Create dynamic visibility with layer masking
 - [**parallax**](https://github.com/Oval-Tutu/shove/blob/main/demo/parallax/init.lua): Multi-layered background scrolling with animated particles and bloom effects
+
+
+The demos serve as practical examples that showcase Shöve's features in action, providing developers with working code that demonstrates how to implement various rendering techniques like custom canvas integration, layer management, and visual effects.
 
 # Shöve Guide 📚
 
