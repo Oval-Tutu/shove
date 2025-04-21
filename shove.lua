@@ -101,8 +101,6 @@ local function createMaskShader()
   ]]
 end
 
--- Persistent tables for reuse to minimize allocations
-local sharedEffectsTable = {}
 -- Canvas pools
 local canvasPools = {
   standard = {},
@@ -588,10 +586,8 @@ local function compositeLayersOnScreen(globalEffects, applyPersistentEffects)
   love.graphics.push()
   love.graphics.scale(state.scale_x, state.scale_y)
 
-  -- Clear shared effects table instead of creating a new one
-  for k in pairs(sharedEffectsTable) do
-    sharedEffectsTable[k] = nil
-  end
+  -- Create shared effects
+  local sharedEffectsTable = {}
 
   -- Only apply persistent global effects when requested
   if applyPersistentEffects then
