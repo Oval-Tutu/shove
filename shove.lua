@@ -341,15 +341,69 @@ local function applyEffects(canvas, effects)
     return
   end
 
-  if #effects > 0 then
-    -- Apply just the first shader effect
+  -- Optimization: For single effects, apply directly
+  if #effects == 1 then
     setShader(effects[1])
     love.graphics.draw(canvas)
     setShader(nil)
-    state.specialLayerUsage.effectsApplied = state.specialLayerUsage.effectsApplied + #effects
-  else
-    love.graphics.draw(canvas)
+    state.specialLayerUsage.effectsApplied = state.specialLayerUsage.effectsApplied + 1
+    return
   end
+
+  -- For multiple effects, we need to chain them using swap buffers
+  -- Create or reuse effect buffers as needed
+  local fxCanvasA = shove._fxCanvasA
+  local fxCanvasB = shove._fxCanvasB
+
+  -- Ensure buffers exist and are correct size
+  if not fxCanvasA or fxCanvasA:getWidth() ~= state.viewport_width then
+    if fxCanvasA then fxCanvasA:release() end
+    if fxCanvasB then fxCanvasB:release() end
+
+    fxCanvasA = love.graphics.newCanvas(state.viewport_width, state.viewport_height)
+    fxCanvasB = love.graphics.newCanvas(state.viewport_width, state.viewport_height)
+
+    -- Store for reuse
+    shove._fxCanvasA = fxCanvasA
+    shove._fxCanvasB = fxCanvasB
+  end
+
+  local _canvas = love.graphics.getCanvas()
+
+  -- Save state
+  love.graphics.push()
+  love.graphics.origin()
+
+  -- Copy original content to first buffer
+  love.graphics.setCanvas(fxCanvasA)
+  love.graphics.clear()
+  love.graphics.draw(canvas)
+
+  local input = fxCanvasA
+  local output = fxCanvasB
+
+  -- Apply effects in sequence (each building on previous result)
+  for i = 1, #effects do
+    love.graphics.setCanvas(output)
+    love.graphics.clear()
+    setShader(effects[i])
+    love.graphics.draw(input)
+    setShader(nil)
+
+    -- Swap buffers for next pass
+    local temp = input
+    input = output
+    output = temp
+
+    state.specialLayerUsage.effectsApplied = state.specialLayerUsage.effectsApplied + 1
+  end
+
+  -- Restore original canvas and state
+  love.graphics.setCanvas(_canvas)
+  love.graphics.pop()
+
+  -- Draw final result
+  love.graphics.draw(input)
 end
 
 --- Begin drawing to a specific layer
