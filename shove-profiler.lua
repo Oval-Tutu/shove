@@ -307,12 +307,6 @@ local function setupMetricsCollector()
     -- Safely build Shöve info
     local state = shoveProfiler.metrics.state or {}
 
-    -- Get batching state if available
-    local batchingEnabled = "?"
-    if shoveProfiler.shove and shoveProfiler.shove.getLayerBatching then
-      batchingEnabled = shoveProfiler.shove.getLayerBatching() and "on" or "off"
-    end
-
     cachedShoveInfo = {
       string.format("Shöve %s", (shove and shove._VERSION and shove._VERSION.string) or "Unknown"),
       string.format("Mode: %s  /  %s  /  %s", state.renderMode or "?", state.fitMethod or "?", state.scalingFilter or "?"),
@@ -340,46 +334,10 @@ local function setupMetricsCollector()
       local specialUsage = state.specialLayerUsage or {}
 
       cachedLayerInfo = {
-        string.format("Render: ( Batching: %s )", batchingEnabled),
         string.format("Layers: %d (%d active)", layerCount, canvasCount - maskCount),
+        string.format("Effects Applied: %d", specialUsage.effectsApplied or 0),
+        string.format("Composites: %d", specialUsage.compositeSwitches or 0)
       }
-
-      -- Add batching metrics if any batching occurred
-      if (specialUsage.batchGroups or 0) > 0 then
-        table.insert(cachedLayerInfo,
-          string.format("Batches: %d (%d layers)",
-            specialUsage.batchGroups,
-            specialUsage.batchedLayers or 0)
-        )
-      end
-
-      -- Only add Effects line if any effects were applied
-      if (specialUsage.effectsApplied or 0) > 0 then
-        table.insert(cachedLayerInfo,
-        string.format("Effects: %d (%d %s)",
-          specialUsage.effectsApplied,
-          specialUsage.effectBufferSwitches or 0,
-          (specialUsage.effectBufferSwitches or 0) == 1 and "switch" or "switches")
-        )
-      end
-
-      -- Add batched effect operations if any occurred
-      if (specialUsage.batchedEffectOperations or 0) > 0 then
-        table.insert(cachedLayerInfo,
-          string.format("Batched Effects: %d operations",
-            specialUsage.batchedEffectOperations)
-        )
-      end
-
-      -- Add state changes metric
-      if (specialUsage.stateChanges or 0) > 0 then
-        table.insert(cachedLayerInfo,
-          string.format("State Changes: %d",
-            specialUsage.stateChanges)
-        )
-      end
-
-      table.insert(cachedLayerInfo, string.format("Composites: %d", specialUsage.compositeSwitches or 0))
 
     end
     updatePanelDimensions()
@@ -613,19 +571,6 @@ local function toggleVSync()
   love.window.setVSync(shoveProfiler.state.isVsyncEnabled)
 end
 
---- Toggle layer batching on/off
----@return nil
-local function toggleBatching()
-  if not shoveProfiler.state.isOverlayVisible then return end
-  if not shoveProfiler.shove or not shoveProfiler.shove.setLayerBatching then return end
-
-  local currentState = shoveProfiler.shove.getLayerBatching()
-  shoveProfiler.shove.setLayerBatching(not currentState)
-
-  -- Force metrics collection to update display
-  love.event.push("shove_collect_metrics")
-end
-
 --- Checks if a touch position is on the panel border
 ---@param x number Touch x-coordinate
 ---@param y number Touch y-coordinate
@@ -708,15 +653,10 @@ function shoveProfiler.gamepadpressed(joystick, button)
      (button == "y" and joystick:isGamepadDown("back")) then
     toggleSizePreset()
   end
-  -- Toggle batching with Select + X/Square when overlay is visible
-  -- Toggle FPS overlay with Select + X/Square when overlay is not visible
+  -- Toggle FPS overlay with Select + X/Square
   if (button == "back" and joystick:isGamepadDown("x")) or
      (button == "x" and joystick:isGamepadDown("back")) then
-    if shoveProfiler.state.isOverlayVisible then
-      toggleBatching()
-    else
       toggleFpsOverlay()
-    end
   end
 end
 
@@ -751,12 +691,6 @@ function shoveProfiler.keypressed(key)
       love.keyboard.isDown("lgui") or love.keyboard.isDown("rgui")) and
      key == "s" then
     toggleSizePreset()
-  end
-  -- Toggle batching with Ctrl+B or Cmd+B
-  if (love.keyboard.isDown("lctrl") or love.keyboard.isDown("rctrl") or
-      love.keyboard.isDown("lgui") or love.keyboard.isDown("rgui")) and
-     key == "b" then
-    toggleBatching()
   end
 end
 
