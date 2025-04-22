@@ -60,7 +60,7 @@ local shoveProfiler = {
     -- Add this new structure for FPS tracking
     fpsHistory = {
       values = {},       -- Array of recent FPS values
-      maxSamples = 30,   -- Store 30 samples (about 6 seconds at 0.2s collection interval)
+      maxSamples = 100,  -- Store 100 samples
       currentIndex = 1,  -- Current position in the circular buffer
       sum = 0,           -- Running sum of stored values
       count = 0,         -- Number of samples collected (up to maxSamples)
@@ -280,9 +280,7 @@ local function setupMetricsCollector()
 
     -- Collect metrics
     shoveProfiler.metrics.fps = love.timer.getFPS()
-    shoveProfiler.metrics.memory = collectgarbage("count")
-    shoveProfiler.metrics.stats = love.graphics.getStats()
-
+    -- Minimal FPS calculation
     local fpsHistory = shoveProfiler.metrics.fpsHistory
     local currentFps = shoveProfiler.metrics.fps or 0
     local oldValue = fpsHistory.values[fpsHistory.currentIndex] or 0
@@ -302,86 +300,89 @@ local function setupMetricsCollector()
       fpsHistory.avgFps = fpsHistory.sum / fpsHistory.count
     end
 
-    -- Safely get Shöve state
-    if shoveProfiler.shove and type(shoveProfiler.shove.getState) == "function" then
-      shoveProfiler.metrics.state = shoveProfiler.shove.getState()
-    else
-      shoveProfiler.metrics.state = {}
-    end
+    -- All the other metrics are collected in the render function
+    if shoveProfiler.state.overlayMode == "full" then
+      shoveProfiler.metrics.memory = collectgarbage("count")
+      shoveProfiler.metrics.stats = love.graphics.getStats()
 
-    -- Safely access stats properties
-    local stats = shoveProfiler.metrics.stats or {}
-    local textureMemoryMB = string.format("%.1f MB", (stats.texturememory or 0) / (1024 * 1024))
-    local memoryMB = string.format("%.1f MB", shoveProfiler.metrics.memory / 1024)
-    local frameTime = love.timer.getDelta() * 1000
-
-    -- Calculate font count and adjust for the profiler's default fonts
-    local fontCount = stats.fonts and (stats.fonts - 2) or 0
-
-    -- Calculate total particle count
-    local totalParticles = 0
-    for ps, _ in pairs(shoveProfiler.particles.systems) do
-      if ps and ps.isActive and ps:isActive() then
-        totalParticles = totalParticles + ps:getCount()
+      -- Safely get Shöve state
+      if shoveProfiler.shove and type(shoveProfiler.shove.getState) == "function" then
+        shoveProfiler.metrics.state = shoveProfiler.shove.getState()
+      else
+        shoveProfiler.metrics.state = {}
       end
-    end
-    shoveProfiler.particles.count = totalParticles
 
-    -- Build cached performance info
-    cachedPerformanceInfo = {
-      string.format("LÖVE %s ", shoveProfiler.metrics.loveVersion),
-      string.format("FPS: %.0f (%.1f ms)", shoveProfiler.metrics.fps or 0, frameTime),
-      string.format("FPS: %.0f (average)", shoveProfiler.metrics.fpsHistory.avgFps or 0),
-      string.format("VSync: %s", shoveProfiler.state.isVsyncEnabled and "On" or "OFF"),
-      string.format("Draw Calls: %d (%d batched)", stats.drawcalls or 0, stats.drawcallsbatched or 0),
-      string.format("Canvases: %d (%d switches)", stats.canvases or 0, stats.canvasswitches or 0),
-      string.format("Shader Switches: %d", stats.shaderswitches or 0),
-      string.format("Particles: %d", totalParticles),
-      string.format("Images: %d", stats.images or 0),
-      string.format("Fonts: %d", fontCount),
-      string.format("VRAM: %s", textureMemoryMB),
-      string.format("RAM: %s", memoryMB),
-      ""
-    }
+      -- Safely access stats properties
+      local stats = shoveProfiler.metrics.stats or {}
+      local textureMemoryMB = string.format("%.1f MB", (stats.texturememory or 0) / (1024 * 1024))
+      local memoryMB = string.format("%.1f MB", shoveProfiler.metrics.memory / 1024)
+      local frameTime = love.timer.getDelta() * 1000
 
-    -- Safely build Shöve info
-    local state = shoveProfiler.metrics.state or {}
+      -- Calculate font count and adjust for the profiler's default fonts
+      local fontCount = stats.fonts and (stats.fonts - 2) or 0
 
-    cachedShoveInfo = {
-      string.format("Shöve %s", (shove and shove._VERSION and shove._VERSION.string) or "Unknown"),
-      string.format("Mode: %s  /  %s  /  %s", state.renderMode or "?", state.fitMethod or "?", state.scalingFilter or "?"),
-      string.format("Window: %d x %d", state.screen_width or 0, state.screen_height or 0),
-      string.format("Viewport: %d x %d", state.viewport_width or 0, state.viewport_height or 0),
-      string.format("Rendered: %d x %d", state.rendered_width or 0, state.rendered_height or 0),
-      string.format("Scale: %.1f x %.1f", state.scale_x or 0, state.scale_y or 0),
-      string.format("Offset: %d x %d", state.offset_x or 0, state.offset_y or 0),
-      ""
-    }
+      -- Calculate total particle count
+      local totalParticles = 0
+      for ps, _ in pairs(shoveProfiler.particles.systems) do
+        if ps and ps.isActive and ps:isActive() then
+          totalParticles = totalParticles + ps:getCount()
+        end
+      end
+      shoveProfiler.particles.count = totalParticles
 
-    -- Safely build layer info
-    for k in pairs(cachedLayerInfo) do cachedLayerInfo[k] = nil end
-    local layerCount = 0
-    local canvasCount = 0
-    if state.renderMode == "layer" and state.layers then
-      local layer_count = state.layers.count or 0
-      local canvas_count = state.layers.canvas_count or 0
-      local special_layer_count = state.layers.special_layer_count or 0
-      layerCount = layer_count - special_layer_count
-      canvasCount = canvas_count - special_layer_count
-      local maskCount = state.layers.mask_count or 0
-
-      -- Add special layer usage information
-      local specialUsage = state.specialLayerUsage or {}
-
-      cachedLayerInfo = {
-        string.format("Layers: %d (%d active)", layerCount, canvasCount - maskCount),
-        string.format("Effects Applied: %d", specialUsage.effectsApplied or 0),
-        string.format("Composites: %d", specialUsage.compositeSwitches or 0)
+      -- Build cached performance info
+      cachedPerformanceInfo = {
+        string.format("LÖVE %s ", shoveProfiler.metrics.loveVersion),
+        string.format("FPS: %.0f (%.1f ms)", shoveProfiler.metrics.fps or 0, frameTime),
+        string.format("FPS: %.0f (average)", shoveProfiler.metrics.fpsHistory.avgFps or 0),
+        string.format("VSync: %s", shoveProfiler.state.isVsyncEnabled and "On" or "OFF"),
+        string.format("Draw Calls: %d (%d batched)", stats.drawcalls or 0, stats.drawcallsbatched or 0),
+        string.format("Canvases: %d (%d switches)", stats.canvases or 0, stats.canvasswitches or 0),
+        string.format("Shader Switches: %d", stats.shaderswitches or 0),
+        string.format("Particles: %d", totalParticles),
+        string.format("Images: %d", stats.images or 0),
+        string.format("Fonts: %d", fontCount),
+        string.format("VRAM: %s", textureMemoryMB),
+        string.format("RAM: %s", memoryMB),
+        ""
       }
 
-    end
+      -- Safely build Shöve info
+      local state = shoveProfiler.metrics.state or {}
 
-    if shoveProfiler.state.overlayMode == "full" then
+      cachedShoveInfo = {
+        string.format("Shöve %s", (shove and shove._VERSION and shove._VERSION.string) or "Unknown"),
+        string.format("Mode: %s  /  %s  /  %s", state.renderMode or "?", state.fitMethod or "?", state.scalingFilter or "?"),
+        string.format("Window: %d x %d", state.screen_width or 0, state.screen_height or 0),
+        string.format("Viewport: %d x %d", state.viewport_width or 0, state.viewport_height or 0),
+        string.format("Rendered: %d x %d", state.rendered_width or 0, state.rendered_height or 0),
+        string.format("Scale: %.1f x %.1f", state.scale_x or 0, state.scale_y or 0),
+        string.format("Offset: %d x %d", state.offset_x or 0, state.offset_y or 0),
+        ""
+      }
+
+      -- Safely build layer info
+      for k in pairs(cachedLayerInfo) do cachedLayerInfo[k] = nil end
+      local layerCount = 0
+      local canvasCount = 0
+      if state.renderMode == "layer" and state.layers then
+        local layer_count = state.layers.count or 0
+        local canvas_count = state.layers.canvas_count or 0
+        local special_layer_count = state.layers.special_layer_count or 0
+        layerCount = layer_count - special_layer_count
+        canvasCount = canvas_count - special_layer_count
+        local maskCount = state.layers.mask_count or 0
+
+        -- Add special layer usage information
+        local specialUsage = state.specialLayerUsage or {}
+
+        cachedLayerInfo = {
+          string.format("Layers: %d (%d active)", layerCount, canvasCount - maskCount),
+          string.format("Effects Applied: %d", specialUsage.effectsApplied or 0),
+          string.format("Composites: %d", specialUsage.compositeSwitches or 0)
+        }
+      end
+
       local contentHash = shoveProfiler.metrics.fps ..
         shoveProfiler.metrics.fpsHistory.avgFps ..
         stats.drawcalls ..
@@ -398,7 +399,7 @@ local function setupMetricsCollector()
         tostring(#cachedLayerInfo)
       shoveProfiler.state.overlayNeedsUpdate = hasContentChanged(contentHash)
     elseif shoveProfiler.state.overlayMode == "fps" then
-      shoveProfiler.state.overlayNeedsUpdate = hasContentChanged(shoveProfiler.metrics.fps)
+      shoveProfiler.state.overlayNeedsUpdate = hasContentChanged(shoveProfiler.metrics.fps .. shoveProfiler.metrics.fpsHistory.avgFps)
     end
 
     updatePanelDimensions()
@@ -544,15 +545,15 @@ function shoveProfiler.renderOverlay()
   -- For minimal FPS overlay, we can directly render it (simple enough)
   if shoveProfiler.state.overlayMode == "fps" then
     -- Render the FPS counter
-    local fpsText = string.format("FPS: %.0f", shoveProfiler.metrics.fps or 0)
+    local fpsText = string.format("FPS: %.0f (Avg. %.0f)", shoveProfiler.metrics.fps or 0, shoveProfiler.metrics.fpsHistory.avgFps or 0)
     local largeFont = shoveProfiler.config.fonts["large"]
     local textWidth = largeFont:getWidth(fpsText)
     local textHeight = largeFont:getHeight()
-    local padding = 10
+    local padding = shoveProfiler.config.sizes["large"].padding
     local canvasWidth = textWidth + (padding * 2)
     local canvasHeight = textHeight + (padding * 2)
-    local x = love.graphics.getWidth() - canvasWidth - 10
-    local y = 10
+    local x = love.graphics.getWidth() - canvasWidth - padding
+    local y = padding
 
     -- Prepare the canvas for FPS overlay
     local needsRedraw = prepareOverlayCanvas(canvasWidth, canvasHeight, fpsText)
