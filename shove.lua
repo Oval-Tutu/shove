@@ -13,8 +13,8 @@
 ---@field offset_x number Horizontal offset for centering
 ---@field offset_y number Vertical offset for centering
 ---@field layers ShoveLayerSystem Layer management system
----@field maskShader love.Shader Shader used for layer masking
----@field resizeCallback function Callback function for window resize
+---@field maskShader love.Shader|nil Shader used for layer masking
+---@field resizeCallback function|nil Callback function for window resize
 ---@field inDrawMode boolean Whether we're currently in drawing mode
 ---@field specialLayerUsage table Tracking for special layer usage
 -- Internal state variables
@@ -151,7 +151,7 @@ end
 ---@param shader love.Shader|nil Shader to set, or nil to use default
 ---@return boolean changed Whether the shader was actually changed
 local function setShader(shader)
-  if state.currentRenderState.shader ~= shader then
+  if shader ~= nil and state.currentRenderState.shader ~= shader then
     love.graphics.setShader(shader)
     state.currentRenderState.shader = shader
     return true
@@ -179,19 +179,18 @@ end
 ---@param value number|nil Value to test against
 ---@return boolean changed Whether the stencil test was actually changed
 local function setStencilTest(mode, value)
-  local isNil = (mode == nil)
   local currentMode = state.currentRenderState.stencilTest
   local currentValue = state.currentRenderState.stencilValue
 
-  if (currentMode ~= mode) or (not isNil and currentValue ~= value) then
-    if isNil then
-      love.graphics.setStencilTest()
-    else
+  if (currentMode ~= mode) or (mode ~= nil and currentValue ~= value) then
+    if (mode ~= nil and value ~= nil) then
       love.graphics.setStencilTest(mode, value)
+    else
+      love.graphics.setStencilTest()
     end
 
     state.currentRenderState.stencilTest = mode
-    state.currentRenderState.stencilValue = isNil and nil or value
+    state.currentRenderState.stencilValue = (mode == nil) and nil or value
     return true
   end
   return false
@@ -841,7 +840,7 @@ local shove = {
       error("shove.updateWindowMode: flags must be a table or nil", 2)
     end
 
-    local success, message = love.window.updateWindowMode(width, height, flags)
+    local success, message = love.window.setMode(width, height, flags)
 
     if success then
       -- Get the actual dimensions (might differ from requested)

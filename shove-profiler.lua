@@ -1,5 +1,5 @@
 ---@class ShoveProfiler
----@field shove table Reference to the main Shöve instance
+---@field shove table|nil Reference to the main Shöve instance
 ---@field config table Configuration settings
 ---@field state table State for overlay visibility and tracking
 ---@field metrics table Metrics data containers
@@ -212,7 +212,6 @@ local function toggleSizePreset()
 end
 
 --- Sets up LÖVE event handlers for the profiler
----@param originalHandlers table Table to store original handlers
 ---@return nil
 local function setupEventHandlers()
   local originalHandlers = {}
@@ -560,7 +559,7 @@ function shoveProfiler.renderOverlay()
     local y = padding
 
     -- Prepare the canvas for FPS overlay
-    local needsRedraw = prepareOverlayCanvas(canvasWidth, canvasHeight, fpsText)
+    local needsRedraw = prepareOverlayCanvas(canvasWidth, canvasHeight)
 
     -- Handle the canvas creation/update as needed
     if needsRedraw then
