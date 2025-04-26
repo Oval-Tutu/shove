@@ -151,7 +151,7 @@ end
 ---@param shader love.Shader|nil Shader to set, or nil to use default
 ---@return boolean changed Whether the shader was actually changed
 local function setShader(shader)
-  if shader ~= nil and state.currentRenderState.shader ~= shader then
+  if state.currentRenderState.shader ~= shader then
     love.graphics.setShader(shader)
     state.currentRenderState.shader = shader
     return true
