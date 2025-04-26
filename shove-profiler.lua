@@ -303,7 +303,11 @@ local function setupMetricsCollector()
     -- All the other metrics are collected in the render function
     if shoveProfiler.state.overlayMode == "full" then
       shoveProfiler.metrics.memory = collectgarbage("count")
-      shoveProfiler.metrics.stats = love.graphics.getStats()
+
+      -- Use existing stats - only fetch them if they haven't already been captured
+      if not shoveProfiler.metrics.stats then
+        shoveProfiler.metrics.stats = love.graphics.getStats()
+      end
 
       -- Safely get Shöve state
       if shoveProfiler.shove and type(shoveProfiler.shove.getState) == "function" then
@@ -631,6 +635,10 @@ function shoveProfiler.renderOverlay()
     -- Draw the cached canvas
     love.graphics.setColor(1, 1, 1, 1)
     love.graphics.draw(shoveProfiler.state.overlayCanvas, area.x, area.y)
+
+    -- Capture stats at the end of rendering
+    -- This ensures we get them before love.graphics.present() resets them
+    shoveProfiler.metrics.stats = love.graphics.getStats()
   end
 end
 
