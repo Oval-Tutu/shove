@@ -17,6 +17,9 @@
 ---@field resizeCallback function|nil Callback function for window resize
 ---@field inDrawMode boolean Whether we're currently in drawing mode
 ---@field specialLayerUsage table Tracking for special layer usage
+---@field useSafeArea boolean Use mobile safe area for screen resolution
+---@field safe_offset_x number Horizontal safe offset
+---@field safe_offset_y number Vertical safe offset
 -- Internal state variables
 local state = {
   -- Settings
@@ -67,6 +70,16 @@ local state = {
     compositeSwitches = 0,    -- How many times the composite layer was used
     effectsApplied = 0,       -- How many effect applications occurred
   },
+  -- Whether to use batch processing for similar layers
+  enableBatching = true,
+  -- Shader registry for effect identification
+  shaderRegistry = {
+    nextId = 1,
+    shaders = setmetatable({}, {__mode = "k"}) -- Weak keys to allow shader garbage collection
+  },
+  useSafeArea = false,
+  safe_offset_x = 0,
+  safe_offset_y = 0
 }
 
 ---@class ShoveLayerSystem
@@ -688,6 +701,7 @@ local shove = {
   ---@field fitMethod? "aspect"|"pixel"|"stretch"|"none" Scaling method
   ---@field renderMode? "direct"|"layer" Rendering approach
   ---@field scalingFilter? "nearest"|"linear" Scaling filter for textures
+  ---@field useSafeArea? boolean Use mobile safe area
 
   --- Initialize the resolution system
   ---@param width number Viewport width
@@ -731,6 +745,13 @@ local shove = {
          settingsTable.scalingFilter ~= "none" then
         error("shove.setResolution: scalingFilter must be 'nearest', 'linear', or 'none'", 2)
       end
+
+      -- Validate useSafeArea
+      if settingsTable.useSafeArea ~= nil and
+         settingsTable.useSafeArea ~= true and
+         settingsTable.useSafeArea ~= false then
+        error("shove.setResolutions: useSafeArea must be true or false", 2)
+      end
     end
 
     -- Clear previous state
@@ -742,7 +763,6 @@ local shove = {
 
     state.viewport_width = width
     state.viewport_height = height
-    state.screen_width, state.screen_height = love.graphics.getDimensions()
 
     if settingsTable then
       state.fitMethod = settingsTable.fitMethod or "aspect"
@@ -752,10 +772,18 @@ local shove = {
       else
         state.scalingFilter = state.fitMethod == "pixel" and "nearest" or "linear"
       end
+      state.useSafeArea = settingsTable.useSafeArea or false
     else
       state.fitMethod = "aspect"
       state.renderMode = "direct"
       state.scalingFilter = "linear"
+      state.useSafeArea = false
+    end
+
+    if state.useSafeArea then
+      state.safe_offset_x, safe_offset_y, state.screen_width, state.screen_height = love.window.getSafeArea()
+    else
+      state.screen_width, state.screen_height = love.graphics.getDimensions()
     end
 
     calculateTransforms()
@@ -813,7 +841,12 @@ local shove = {
     if success then
       -- Only call resize if we're already initialized
       if state.viewport_width > 0 and state.viewport_height > 0 then
-        local actualWidth, actualHeight = love.graphics.getDimensions()
+        local actualWidth, actualHeight
+        if state.useSafeArea then
+          --_, _, actualWidth, actualHeight = love.window.getSafeArea()
+        --else
+          actualWidth, actualHeight = love.graphics.getDimensions()
+        end
         shove.resize(actualWidth, actualHeight)
       end
     end
@@ -844,7 +877,12 @@ local shove = {
 
     if success then
       -- Get the actual dimensions (might differ from requested)
-      local actualWidth, actualHeight = love.graphics.getDimensions()
+      local actualWidth, actualHeight
+      if state.useSafeArea then
+        --_, _, actualWidth, actualHeight = love.window.getSafeArea()
+      --else
+        actualWidth, actualHeight = love.graphics.getDimensions()
+      end
       shove.resize(actualWidth, actualHeight)
     end
 
@@ -1674,6 +1712,10 @@ local shove = {
 
     state.screen_width = width
     state.screen_height = height
+    if state.useSafeArea then
+      state.safe_offset_x, state.safe_offset_y, _, _ = love.window.getSafeArea()
+    end
+
     calculateTransforms()
     -- Call resize callback if it exists
     if type(state.resizeCallback) == "function" then
