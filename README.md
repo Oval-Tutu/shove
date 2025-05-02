@@ -76,13 +76,18 @@ Run `love demo/` to explore all demos. Use <kbd>SPACE</kbd> to cycle through exa
 
 Each demo showcases different Shöve capabilities:
 - [**low-res**](https://github.com/Oval-Tutu/shove/blob/main/demo/low-res/init.lua):: Pixel-perfect scaling with a tiny 64x64 resolution
+- [**mouse-input**](https://github.com/Oval-Tutu/shove/blob/main/demo/mouse-input/init.lua): Convert between screen and viewport coordinates
 - [**single-shader**](https://github.com/Oval-Tutu/shove/blob/main/demo/single-shader/init.lua): Apply shaders to specific layers
 - [**multiple-shaders**](https://github.com/Oval-Tutu/shove/blob/main/demo/multiple-shaders/init.lua): Chain multiple effects
-- [**mouse-input**](https://github.com/Oval-Tutu/shove/blob/main/demo/mouse-input/init.lua): Convert between screen and viewport coordinates
 - [**canvases-shaders**](https://github.com/Oval-Tutu/shove/blob/main/demo/canvases-shaders/init.lua): Apply different effects to different layers
+- [**user-canvas-direct**](https://github.com/Oval-Tutu/shove/blob/main/demo/user-canvas-direct/init.lua): Seamlessly integrate custom canvases within direct rendering mode
+- [**user-canvas-layer**](https://github.com/Oval-Tutu/shove/blob/main/demo/user-canvas-layer/init.lua): Use custom canvases while preserving layer state in layer rendering mode
 - [**stencil**](https://github.com/Oval-Tutu/shove/blob/main/demo/stencil/init.lua): Use stencil buffers with layers
 - [**mask**](https://github.com/Oval-Tutu/shove/blob/main/demo/mask/init.lua): Create dynamic visibility with layer masking
 - [**parallax**](https://github.com/Oval-Tutu/shove/blob/main/demo/parallax/init.lua): Multi-layered background scrolling with animated particles and bloom effects
+
+
+The demos serve as practical examples that showcase Shöve's features in action, providing developers with working code that demonstrates how to implement various rendering techniques like custom canvas integration, layer management, and visual effects.
 
 # Shöve Guide 📚
 
@@ -937,13 +942,6 @@ function love.draw()
 end
 ```
 
-When evaluating batch processing impact, pay attention to:
-
-1. **State Changes**: Fewer is better, especially on mobile
-2. **Batch Groups**: Number of layer groups with similar properties
-3. **Batched Layers**: Total layers processed in batches
-4. **Batched Effect Operations**: How many effect applications were optimized
-
 #### Profiler Controls
 
 - **Keyboard:** <kbd>Ctrl</kbd> + <kbd>P</kbd> to toggle overlay
@@ -959,9 +957,38 @@ When evaluating batch processing impact, pay attention to:
 
 #### Profiler Performance Considerations
 
+The Shöve profiler has been highly optimized to have negligible performance impact, even at very high frame rates. This is achieved through several key optimizations:
+
+- **Unified Canvas Resource Management**: Both overlay modes share a single canvas resource (`overlayCanvas`), intelligently reallocating only when necessary due to dimension changes
+- **Targeted Content Change Detection**: The profiler only triggers redraws when actual meaningful data changes, using content hashing tailored to each overlay type
+- **Event-Driven Metrics Collection**: Metrics are collected through the `shove_collect_metrics` event at controlled intervals rather than every frame
+- **Efficient Drawing Pipeline**: Graphics state changes are batched and minimized during rendering operations
+- **Selective Update Strategy**: 
+  - FPS overlay only updates when the FPS value changes
+  - Full overlay updates when any of its displayed metrics change
+
+#### How Metrics Collection Works
+
+The implementation uses an event-driven approach where:
+
+1. The `shove_collect_metrics` event is pushed periodically during rendering (every `collectionInterval * 2` seconds)
+2. When triggered, this event handler:
+   - Updates all performance metrics (FPS, memory usage, draw calls, etc.)
+   - Constructs content hashes specific to each overlay type
+   - Sets the `overlayNeedsUpdate` flag only when content has meaningfully changed
+   - Updates cached text information to avoid string formatting during rendering
+
+This approach ensures metrics are collected at a controlled rate independent of frame rate, while the rendering system efficiently manages when canvas redraws are necessary.
+
+Due to these optimizations, the impact is effectively unmeasurable in typical usage scenarios. The profiler can be left enabled during development without concern for performance degradation.
+
+You can still remove the profiler module entirely as described below.
+
+#### Profiler Performance Considerations
+
 When running at very high frame rates (many hundred of FPS), the profiler itself introduces a small but measurable performance overhead.
-In our testing we observed the profiler's impact to be approximately 1.2% to 1.5% of total FPS.
-This overhead comes from the additional calculations, memory access, and UI rendering that the profiler performs each frame to track and display metrics.
+In our testing we observed the profiler's impact to be approximately 2% to 4% of total FPS.
+This overhead comes from the additional calculations, memory access, and UI rendering that the profiler performs to track and display metrics.
 
 For most development scenarios, this minimal impact won't affect your workflow. However, when performing precise performance benchmarking or optimization on high-end systems, consider temporarily disabling the profiler by using the toggle shortcut (<kbd>Ctrl</kbd> + <kbd>P</kbd>) or removing the profiler module entirely for the most accurate measurements.
 
@@ -971,60 +998,31 @@ The profiler is implemented in a separate file (`shove-profiler.lua`) so you can
 Remove profiler file in your production builds and Shöve will automatically detect its absence and use a no-op stub implementation.
 This approach ensures that the profiler adds zero overhead to your game in production releases while exposing useful tooling during development.
 
-## Optimizing Layer Rendering
+## Layer Rendering Performance
 
-Shöve implements several sophisticated rendering optimizations that can help improve performance when using layer-based rendering. These optimizations focus on reducing state changes and minimizing draw calls.
+Shöve's layer-based rendering system is designed to work effectively with LÖVE's built-in optimizations:
 
-### Key Optimizations
+### LÖVE's Built-in Optimizations
 
-#### Layer Batching
+LÖVE automatically optimizes rendering in several ways:
 
-The core optimization in Shöve is layer batching, which:
+1. **Draw Call Batching**: Similar drawing operations are automatically batched when possible
+2. **Texture Atlas Management**: Efficient handling of sprite sheets and image data
+3. **State Change Minimization**: LÖVE tracks rendering state to minimize expensive changes
 
-1. **Groups similar layers** based on shared properties (blend mode, effects, masks)
-2. **Processes effects in batches** to reduce shader switches
-3. **Minimizes state changes** by setting blend modes once per batch
-4. **Optimizes memory usage** with persistent table reuse
+### Shöve's Layer Approach
 
-These optimizations are particularly valuable for:
-- Games with many layers using the same blend mode
-- Scenes with multiple layers sharing identical effects
-- Lower-end hardware where state changes are expensive
-- Mobile devices where reducing draw calls improves battery life
+Shöve complements these optimizations by:
 
-### Controlling Batch Processing
+1. **Maintaining Proper Draw Order**: Ensuring layers are drawn in the correct z-order
+2. **Minimizing State Changes**: Setting blend modes and shaders only when they change
+3. **Canvas Pooling**: Reusing canvas objects to reduce memory allocation
+4. **Effect Application**: Applying shader effects efficiently to entire layers
 
-Batch processing is enabled by default for layer-based render but can be toggled at runtime:
+The profiler displays metrics that can help you understand your application's rendering performance, including:
 
-```lua
--- Disable batch processing
-local previousState = shove.setLayerBatching(false)
-
--- Check current batch processing state
-local batchingEnabled = shove.getLayerBatching()
-
--- Re-enable batch processing
-shove.setLayerBatching(true)
-```
-
-#### When to Disable Batching
-
-Despite its benefits, batch processing adds some CPU overhead. Consider disabling it when:
-
-- Your game has very few layers (less than 3-4)
-- Layers have unique blend modes or effects (no batching opportunities)
-- You're CPU-bound rather than GPU-bound
-- Profiler metrics show no significant reduction in state changes
-
-#### Testing Your Specific Case
-
-Since rendering performance is highly dependent on your specific game and target hardware, use the profiler to test both modes:
-1. Run your game with default settings (batching enabled)
-2. Note the FPS and state change metrics
-3. Disable batching: `shove.setLayerBatching(false)`
-4. Compare metrics to determine the best configuration
-
-The ideal setting varies by game, so let your profiler results guide your decision rather than assuming one approach is always better.
+- **Effects Applied**: Number of shader effects applied to layers
+- **Composite Operations**: Number of times layers were composited together
 
 ## API Reference
 

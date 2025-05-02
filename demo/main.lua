@@ -5,15 +5,15 @@ local is_fullscreen = love.window.getFullscreen()
 local demo_data = {
   --{ module = "no-shove" },
   { module = "low-res" },
+  { module = "mouse-input" },
   { module = "single-shader" },
   { module = "multiple-shaders" },
-  { module = "mouse-input" },
   { module = "canvases-shaders" },
+  { module = "user-canvas-direct" },
+  { module = "user-canvas-layer" },
   { module = "stencil" },
   { module = "mask" },
   { module = "parallax" },
-  { module = "user-canvas-direct" },
-  { module = "user-canvas-layer" },
 }
 
 local demos = {}

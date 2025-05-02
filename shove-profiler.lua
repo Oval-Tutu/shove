@@ -1,5 +1,5 @@
 ---@class ShoveProfiler
----@field shove table Reference to the main Shöve instance
+---@field shove table|nil Reference to the main Shöve instance
 ---@field config table Configuration settings
 ---@field state table State for overlay visibility and tracking
 ---@field metrics table Metrics data containers
@@ -46,15 +46,27 @@ local shoveProfiler = {
   },
   -- State for overlay visibility and tracking
   state = {
-    isOverlayVisible = false,
-    isFpsOverlayVisible = false,
+    overlayMode = "none", -- Can be "none", "fps", or "full"
     isVsyncEnabled = love.window.getVSync(),
     lastCollectionTime = 0,
     lastEventPushTime = 0,
     currentSizePreset = "default",
+    overlayCanvas = nil,
+    overlayNeedsUpdate = true,
+    lastOverlayContentHash = "",
   },
   -- Metrics data containers
-  metrics = {},
+  metrics = {
+    -- Add this new structure for FPS tracking
+    fpsHistory = {
+      values = {},       -- Array of recent FPS values
+      maxSamples = 100,  -- Store 100 samples
+      currentIndex = 1,  -- Current position in the circular buffer
+      sum = 0,           -- Running sum of stored values
+      count = 0,         -- Number of samples collected (up to maxSamples)
+      avgFps = 0         -- The calculated average FPS
+    }
+  },
   -- Particle system tracking
   particles = {
     count = 0,
@@ -105,6 +117,42 @@ local cachedShoveInfo = {}
 ---@type string[]
 local cachedLayerInfo = {}
 
+--- Check if content has changed
+--- @param content string Content to hash
+--- @return boolean changed True if content has changed
+local function hasContentChanged(content)
+  -- Check if content has changed
+  local changed = content ~= shoveProfiler.state.lastOverlayContentHash
+
+  -- Update the stored hash
+  if changed then
+    shoveProfiler.state.lastOverlayContentHash = content
+  end
+
+  return changed
+end
+
+--- Prepares overlay canvas if needed
+--- @param width number Canvas width
+--- @param height number Canvas height
+--- @return boolean needsRedraw Whether the canvas needs to be redrawn
+local function prepareOverlayCanvas(width, height)
+  -- Check if a new canvas is needed
+  local needsNewCanvas = not shoveProfiler.state.overlayCanvas or
+                         shoveProfiler.state.overlayCanvas:getWidth() ~= width or
+                         shoveProfiler.state.overlayCanvas:getHeight() ~= height
+
+  -- Check if content has changed
+  local needsRedraw = needsNewCanvas or shoveProfiler.state.overlayNeedsUpdate
+
+  -- Create the canvas if needed
+  if needsNewCanvas and needsRedraw then
+    shoveProfiler.state.overlayCanvas = love.graphics.newCanvas(width, height)
+  end
+
+  return needsRedraw
+end
+
 --- Update panel dimensions based on current metrics data
 ---@return nil
 local function updatePanelDimensions()
@@ -140,7 +188,9 @@ end
 --- Toggle between size presets
 ---@return nil
 local function toggleSizePreset()
-  if not shoveProfiler.state.isOverlayVisible then return end
+  if shoveProfiler.state.overlayMode ~= "full" then return end
+
+  shoveProfiler.state.overlayNeedsUpdate = true
 
   -- Toggle between default and large
   local newPreset = shoveProfiler.state.currentSizePreset == "default" and "large" or "default"
@@ -162,7 +212,6 @@ local function toggleSizePreset()
 end
 
 --- Sets up LÖVE event handlers for the profiler
----@param originalHandlers table Table to store original handlers
 ---@return nil
 local function setupEventHandlers()
   local originalHandlers = {}
@@ -230,127 +279,132 @@ local function setupMetricsCollector()
 
     -- Collect metrics
     shoveProfiler.metrics.fps = love.timer.getFPS()
-    shoveProfiler.metrics.memory = collectgarbage("count")
-    shoveProfiler.metrics.stats = love.graphics.getStats()
+    -- Minimal FPS calculation
+    local fpsHistory = shoveProfiler.metrics.fpsHistory
+    local currentFps = shoveProfiler.metrics.fps or 0
+    local oldValue = fpsHistory.values[fpsHistory.currentIndex] or 0
 
-    -- Safely get Shöve state
-    if shoveProfiler.shove and type(shoveProfiler.shove.getState) == "function" then
-      shoveProfiler.metrics.state = shoveProfiler.shove.getState()
-    else
-      shoveProfiler.metrics.state = {}
+    -- Update the running sum by adding new value and removing old one
+    fpsHistory.sum = fpsHistory.sum + currentFps - oldValue
+    fpsHistory.values[fpsHistory.currentIndex] = currentFps
+
+    -- Update count and index
+    if fpsHistory.count < fpsHistory.maxSamples then
+      fpsHistory.count = fpsHistory.count + 1
+    end
+    fpsHistory.currentIndex = fpsHistory.currentIndex % fpsHistory.maxSamples + 1
+
+    -- Calculate average
+    if fpsHistory.count > 0 then
+      fpsHistory.avgFps = fpsHistory.sum / fpsHistory.count
     end
 
-    -- Safely access stats properties
-    local stats = shoveProfiler.metrics.stats or {}
-    local textureMemoryMB = (stats.texturememory or 0) / (1024 * 1024)
-    local memoryMB = shoveProfiler.metrics.memory / 1024
-    local frameTime = love.timer.getDelta() * 1000
+    -- All the other metrics are collected in the render function
+    if shoveProfiler.state.overlayMode == "full" then
+      shoveProfiler.metrics.memory = collectgarbage("count")
 
-    -- Calculate font count and adjust for the profiler's default fonts
-    local fontCount = stats.fonts and (stats.fonts - 2) or 0
-
-    -- Calculate total particle count
-    local totalParticles = 0
-    for ps, _ in pairs(shoveProfiler.particles.systems) do
-      if ps and ps.isActive and ps:isActive() then
-        totalParticles = totalParticles + ps:getCount()
+      -- Use existing stats - only fetch them if they haven't already been captured
+      if not shoveProfiler.metrics.stats then
+        shoveProfiler.metrics.stats = love.graphics.getStats()
       end
-    end
-    shoveProfiler.particles.count = totalParticles
 
-    -- Build cached performance info
-    cachedPerformanceInfo = {
-      string.format("LÖVE %s ", shoveProfiler.metrics.loveVersion),
-      string.format("FPS: %.0f (%.1f ms) [vsync: %s]", shoveProfiler.metrics.fps or 0, frameTime, shoveProfiler.state.isVsyncEnabled and "on" or "off"),
-      string.format("Draw Calls: %d (%d batched)", stats.drawcalls or 0, stats.drawcallsbatched or 0),
-      string.format("Canvases: %d (%d switches)", stats.canvases or 0, stats.canvasswitches or 0),
-      string.format("Shader Switches: %d", stats.shaderswitches or 0),
-      string.format("Particles: %d", totalParticles),
-      string.format("Images: %d", stats.images or 0),
-      string.format("Fonts: %d", fontCount),
-      string.format("VRAM: %.1f MB", textureMemoryMB),
-      string.format("RAM: %.1f MB", memoryMB),
-      ""
-    }
+      -- Safely get Shöve state
+      if shoveProfiler.shove and type(shoveProfiler.shove.getState) == "function" then
+        shoveProfiler.metrics.state = shoveProfiler.shove.getState()
+      else
+        shoveProfiler.metrics.state = {}
+      end
 
-    -- Safely build Shöve info
-    local state = shoveProfiler.metrics.state or {}
+      -- Safely access stats properties
+      local stats = shoveProfiler.metrics.stats or {}
+      local textureMemoryMB = string.format("%.1f MB", (stats.texturememory or 0) / (1024 * 1024))
+      local memoryMB = string.format("%.1f MB", shoveProfiler.metrics.memory / 1024)
+      local frameTime = love.timer.getDelta() * 1000
 
-    -- Get batching state if available
-    local batchingEnabled = "?"
-    if shoveProfiler.shove and shoveProfiler.shove.getLayerBatching then
-      batchingEnabled = shoveProfiler.shove.getLayerBatching() and "on" or "off"
-    end
+      -- Calculate font count and adjust for the profiler's default fonts
+      local fontCount = stats.fonts and (stats.fonts - 2) or 0
 
-    cachedShoveInfo = {
-      string.format("Shöve %s", (shove and shove._VERSION and shove._VERSION.string) or "Unknown"),
-      string.format("Mode: %s  /  %s  /  %s", state.renderMode or "?", state.fitMethod or "?", state.scalingFilter or "?"),
-      string.format("Window: %d x %d", state.screen_width or 0, state.screen_height or 0),
-      string.format("Viewport: %d x %d", state.viewport_width or 0, state.viewport_height or 0),
-      string.format("Rendered: %d x %d", state.rendered_width or 0, state.rendered_height or 0),
-      string.format("Scale: %.1f x %.1f", state.scale_x or 0, state.scale_y or 0),
-      string.format("Offset: %d x %d", state.offset_x or 0, state.offset_y or 0),
-      ""
-    }
+      -- Calculate total particle count
+      local totalParticles = 0
+      for ps, _ in pairs(shoveProfiler.particles.systems) do
+        if ps and ps.isActive and ps:isActive() then
+          totalParticles = totalParticles + ps:getCount()
+        end
+      end
+      shoveProfiler.particles.count = totalParticles
 
-    -- Safely build layer info
-    for k in pairs(cachedLayerInfo) do cachedLayerInfo[k] = nil end
-    local layerCount = 0
-    local canvasCount = 0
-    if state.renderMode == "layer" and state.layers then
-      local layer_count = state.layers.count or 0
-      local canvas_count = state.layers.canvas_count or 0
-      local special_layer_count = state.layers.special_layer_count or 0
-      layerCount = layer_count - special_layer_count
-      canvasCount = canvas_count - special_layer_count
-      local maskCount = state.layers.mask_count or 0
-
-      -- Add special layer usage information
-      local specialUsage = state.specialLayerUsage or {}
-
-      cachedLayerInfo = {
-        string.format("Render: ( Batching: %s )", batchingEnabled),
-        string.format("Layers: %d (%d active)", layerCount, canvasCount - maskCount),
+      -- Build cached performance info
+      cachedPerformanceInfo = {
+        string.format("LÖVE %s ", shoveProfiler.metrics.loveVersion),
+        string.format("FPS: %.0f (%.1f ms)", shoveProfiler.metrics.fps or 0, frameTime),
+        string.format("FPS: %.0f (average)", shoveProfiler.metrics.fpsHistory.avgFps or 0),
+        string.format("VSync: %s", shoveProfiler.state.isVsyncEnabled and "On" or "OFF"),
+        string.format("Draw Calls: %d (%d batched)", stats.drawcalls or 0, stats.drawcallsbatched or 0),
+        string.format("Canvases: %d (%d switches)", stats.canvases or 0, stats.canvasswitches or 0),
+        string.format("Shader Switches: %d", stats.shaderswitches or 0),
+        string.format("Particles: %d", totalParticles),
+        string.format("Images: %d", stats.images or 0),
+        string.format("Fonts: %d", fontCount),
+        string.format("VRAM: %s", textureMemoryMB),
+        string.format("RAM: %s", memoryMB),
+        ""
       }
 
-      -- Add batching metrics if any batching occurred
-      if (specialUsage.batchGroups or 0) > 0 then
-        table.insert(cachedLayerInfo,
-          string.format("Batches: %d (%d layers)",
-            specialUsage.batchGroups,
-            specialUsage.batchedLayers or 0)
-        )
+      -- Safely build Shöve info
+      local state = shoveProfiler.metrics.state or {}
+
+      cachedShoveInfo = {
+        string.format("Shöve %s", (shove and shove._VERSION and shove._VERSION.string) or "Unknown"),
+        string.format("Mode: %s  /  %s  /  %s", state.renderMode or "?", state.fitMethod or "?", state.scalingFilter or "?"),
+        string.format("Window: %d x %d", state.screen_width or 0, state.screen_height or 0),
+        string.format("Viewport: %d x %d", state.viewport_width or 0, state.viewport_height or 0),
+        string.format("Rendered: %d x %d", state.rendered_width or 0, state.rendered_height or 0),
+        string.format("Scale: %.1f x %.1f", state.scale_x or 0, state.scale_y or 0),
+        string.format("Offset: %d x %d", state.offset_x or 0, state.offset_y or 0),
+        ""
+      }
+
+      -- Safely build layer info
+      for k in pairs(cachedLayerInfo) do cachedLayerInfo[k] = nil end
+      local layerCount = 0
+      local canvasCount = 0
+      if state.renderMode == "layer" and state.layers then
+        local layer_count = state.layers.count or 0
+        local canvas_count = state.layers.canvas_count or 0
+        local special_layer_count = state.layers.special_layer_count or 0
+        layerCount = layer_count - special_layer_count
+        canvasCount = canvas_count - special_layer_count
+        local maskCount = state.layers.mask_count or 0
+
+        -- Add special layer usage information
+        local specialUsage = state.specialLayerUsage or {}
+
+        cachedLayerInfo = {
+          string.format("Layers: %d (%d active)", layerCount, canvasCount - maskCount),
+          string.format("Effects Applied: %d", specialUsage.effectsApplied or 0),
+          string.format("Composites: %d", specialUsage.compositeSwitches or 0)
+        }
       end
 
-      -- Only add Effects line if any effects were applied
-      if (specialUsage.effectsApplied or 0) > 0 then
-        table.insert(cachedLayerInfo,
-        string.format("Effects: %d (%d %s)",
-          specialUsage.effectsApplied,
-          specialUsage.effectBufferSwitches or 0,
-          (specialUsage.effectBufferSwitches or 0) == 1 and "switch" or "switches")
-        )
-      end
-
-      -- Add batched effect operations if any occurred
-      if (specialUsage.batchedEffectOperations or 0) > 0 then
-        table.insert(cachedLayerInfo,
-          string.format("Batched Effects: %d operations",
-            specialUsage.batchedEffectOperations)
-        )
-      end
-
-      -- Add state changes metric
-      if (specialUsage.stateChanges or 0) > 0 then
-        table.insert(cachedLayerInfo,
-          string.format("State Changes: %d",
-            specialUsage.stateChanges)
-        )
-      end
-
-      table.insert(cachedLayerInfo, string.format("Composites: %d", specialUsage.compositeSwitches or 0))
-
+      local contentHash = shoveProfiler.metrics.fps ..
+        shoveProfiler.metrics.fpsHistory.avgFps ..
+        stats.drawcalls ..
+        stats.drawcallsbatched ..
+        stats.canvases ..
+        stats.canvasswitches ..
+        stats.shaderswitches ..
+        totalParticles ..
+        stats.images ..
+        fontCount ..
+        textureMemoryMB ..
+        memoryMB ..
+        tostring(#cachedShoveInfo) ..
+        tostring(#cachedLayerInfo)
+      shoveProfiler.state.overlayNeedsUpdate = hasContentChanged(contentHash)
+    elseif shoveProfiler.state.overlayMode == "fps" then
+      shoveProfiler.state.overlayNeedsUpdate = hasContentChanged(shoveProfiler.metrics.fps .. shoveProfiler.metrics.fpsHistory.avgFps)
     end
+
     updatePanelDimensions()
   end
 end
@@ -478,94 +532,134 @@ end
 --- Display performance metrics and profiling information
 ---@return nil
 function shoveProfiler.renderOverlay()
-  -- Save current graphics state
-  local r, g, b, a = love.graphics.getColor()
-  local font = love.graphics.getFont()
-  local blendMode, blendAlphaMode = love.graphics.getBlendMode()
+  -- Skip rendering if overlay isn't visible
+  if shoveProfiler.state.overlayMode == "none" then
+    return
+  end
 
-  -- First, render the full overlay if it's visible
-  if shoveProfiler.state.isOverlayVisible then
-    love.graphics.setFont(shoveProfiler.config.font)
+  -- Update metrics at appropriate intervals
+  local currentTime = love.timer.getTime()
+  local pushInterval = shoveProfiler.config.collectionInterval * 2
+  if currentTime - shoveProfiler.state.lastEventPushTime >= pushInterval then
+    love.event.push("shove_collect_metrics")
+    shoveProfiler.state.lastEventPushTime = currentTime
+  end
 
-    -- Get panel dimensions from config
+  -- For minimal FPS overlay, we can directly render it (simple enough)
+  if shoveProfiler.state.overlayMode == "fps" then
+    -- Render the FPS counter
+    local fpsText = string.format("FPS: %.0f (Avg. %.0f)", shoveProfiler.metrics.fps or 0, shoveProfiler.metrics.fpsHistory.avgFps or 0)
+    local largeFont = shoveProfiler.config.fonts["large"]
+    local textWidth = largeFont:getWidth(fpsText)
+    local textHeight = largeFont:getHeight()
+    local padding = shoveProfiler.config.sizes["large"].padding
+    local canvasWidth = textWidth + (padding * 2)
+    local canvasHeight = textHeight + (padding * 2)
+    local x = love.graphics.getWidth() - canvasWidth - padding
+    local y = padding
+
+    -- Prepare the canvas for FPS overlay
+    local needsRedraw = prepareOverlayCanvas(canvasWidth, canvasHeight)
+
+    -- Handle the canvas creation/update as needed
+    if needsRedraw then
+      -- Render to canvas
+      love.graphics.push("all")
+      love.graphics.setCanvas(shoveProfiler.state.overlayCanvas)
+      love.graphics.clear(0, 0, 0, 0.75)
+
+      -- Save canvas origin for proper rendering
+      love.graphics.origin()
+
+      -- Draw border
+      love.graphics.setColor(shoveProfiler.config.colors.midGray)
+      love.graphics.rectangle("line", 0, 0, canvasWidth, canvasHeight)
+
+      -- Render the FPS counter
+      love.graphics.setFont(largeFont)
+      love.graphics.setColor(shoveProfiler.config.colors.orange)
+      love.graphics.print(fpsText, padding, padding)
+
+      -- Restore rendering state
+      love.graphics.pop()
+
+      -- Mark canvas as updated
+      shoveProfiler.state.overlayNeedsUpdate = false
+    end
+
+    -- Draw the cached canvas
+    love.graphics.setColor(1, 1, 1, 1)
+    love.graphics.draw(shoveProfiler.state.overlayCanvas, x, y)
+  elseif shoveProfiler.state.overlayMode == "full" then
+    -- Create canvas if it doesn't exist or if dimensions changed
     local panel = shoveProfiler.config.panel
     local area = shoveProfiler.input.touch.overlayArea
-    local renderX = area.x + panel.padding
-    local renderY = area.y + panel.padding
 
-    -- Panel background
-    love.graphics.setColor(0, 0, 0, 0.75)
-    love.graphics.rectangle("fill", area.x, area.y, panel.width, panel.height)
-    -- Panel Border
-    love.graphics.setColor(shoveProfiler.config.colors.midGray)
-    love.graphics.rectangle("line", area.x, area.y, panel.width, panel.height)
+    -- Prepare the canvas for full overlay
+    local needsRedraw = prepareOverlayCanvas(panel.width, panel.height)
 
-    -- Render sections
-    renderY = renderInfoSection(cachedHardwareInfo, renderX, renderY, shoveProfiler.config.colors.blue)
-    renderY = renderInfoSection(cachedPerformanceInfo, renderX, renderY, shoveProfiler.config.colors.blue)
-    renderY = renderInfoSection(cachedShoveInfo, renderX, renderY, shoveProfiler.config.colors.purple)
-    renderY = renderLayerInfo(renderX, renderY)
-  elseif shoveProfiler.state.isFpsOverlayVisible then
-    -- Render minimal FPS overlay if enabled
-    love.graphics.setFont(shoveProfiler.config.fonts["large"])
-    local frameTime = love.timer.getDelta() * 1000
-    local fpsText = string.format("FPS: %.0f (%.1f ms)",
-                                  shoveProfiler.metrics.fps or 0,
-                                  frameTime)
+    -- Handle the canvas creation/update as needed
+    if needsRedraw then
+      -- Render to canvas
+      love.graphics.push("all")
+      love.graphics.setCanvas(shoveProfiler.state.overlayCanvas)
+      love.graphics.clear(0, 0, 0, 0.75)
 
-    -- Position in top-right corner with some padding
-    local textWidth = shoveProfiler.config.fonts["large"]:getWidth(fpsText)
-    local x = love.graphics.getWidth() - textWidth - 10
-    local y = 10
+      -- Save canvas origin for proper rendering
+      love.graphics.origin()
 
-    love.graphics.setColor(shoveProfiler.config.colors.orange)
-    love.graphics.print(fpsText, x, y)
-  end
-  -- Restore graphics state
-  love.graphics.setColor(r, g, b, a)
-  love.graphics.setFont(font)
-  love.graphics.setBlendMode(blendMode, blendAlphaMode)
+      -- Set font
+      love.graphics.setFont(shoveProfiler.config.font)
 
-  -- Time-based throttle synchronized with collection interval
-  if shoveProfiler.state.isOverlayVisible or shoveProfiler.state.isFpsOverlayVisible then
-    local currentTime = love.timer.getTime()
-    -- Push at half the rate (twice the interval)
-    local pushInterval = shoveProfiler.config.collectionInterval * 2
-    if currentTime - shoveProfiler.state.lastEventPushTime >= pushInterval then
-      love.event.push("shove_collect_metrics")
-      shoveProfiler.state.lastEventPushTime = currentTime
+      -- Draw border
+      love.graphics.setColor(shoveProfiler.config.colors.midGray)
+      love.graphics.rectangle("line", 0, 0, panel.width, panel.height)
+
+      -- Render content sections to canvas
+      local renderX = panel.padding
+      local renderY = panel.padding
+
+      renderY = renderInfoSection(cachedHardwareInfo, renderX, renderY, shoveProfiler.config.colors.blue)
+      renderY = renderInfoSection(cachedPerformanceInfo, renderX, renderY, shoveProfiler.config.colors.blue)
+      renderY = renderInfoSection(cachedShoveInfo, renderX, renderY, shoveProfiler.config.colors.purple)
+      renderY = renderLayerInfo(renderX, renderY)
+
+      -- Restore rendering state
+      love.graphics.pop()
+
+      -- Mark canvas as updated
+      shoveProfiler.state.overlayNeedsUpdate = false
     end
+
+    -- Draw the cached canvas
+    love.graphics.setColor(1, 1, 1, 1)
+    love.graphics.draw(shoveProfiler.state.overlayCanvas, area.x, area.y)
+
+    -- Capture stats at the end of rendering
+    -- This ensures we get them before love.graphics.present() resets them
+    shoveProfiler.metrics.stats = love.graphics.getStats()
   end
 end
 
---- Toggle the visibility of the profiler overlay
+--- Toggle the overlay visibility
+---@param requestedMode? string mode to toggle ("fps" or "full")
 ---@return nil
-local function toggleOverlay()
-  -- If FPS overlay is visible, hide it first
-  if shoveProfiler.state.isFpsOverlayVisible then
-    shoveProfiler.state.isFpsOverlayVisible = false
+local function toggleOverlay(requestedMode)
+  -- add tpye checking
+  if requestedMode ~= "fps" and requestedMode ~= "full" and requestedMode ~= "none" then
+    print("Error: Invalid overlay mode requested")
+    return
   end
 
-  -- Toggle main overlay
-  shoveProfiler.state.isOverlayVisible = not shoveProfiler.state.isOverlayVisible
-  if shoveProfiler.state.isOverlayVisible then
-    shoveProfiler.state.lastCollectionTime = 0
-    love.event.push("shove_collect_metrics")
-  end
-end
-
---- Toggle the visibility of the minimal FPS overlay
----@return nil
-local function toggleFpsOverlay()
-  -- If main overlay is visible, hide it first
-  if shoveProfiler.state.isOverlayVisible then
-    shoveProfiler.state.isOverlayVisible = false
+  if shoveProfiler.state.overlayMode == requestedMode then
+    shoveProfiler.state.overlayMode = "none"
+  else
+    shoveProfiler.state.overlayMode = requestedMode
+    shoveProfiler.state.overlayCanvas = nil
   end
 
-  -- Toggle FPS overlay
-  shoveProfiler.state.isFpsOverlayVisible = not shoveProfiler.state.isFpsOverlayVisible
-  if shoveProfiler.state.isFpsOverlayVisible then
-    -- Ensure metrics are collected for display
+  -- Collect metrics immediately if we're turning on an overlay
+  if shoveProfiler.state.overlayMode ~= "none" then
     shoveProfiler.state.lastCollectionTime = 0
     love.event.push("shove_collect_metrics")
   end
@@ -574,7 +668,7 @@ end
 --- Toggle VSync on/off
 ---@return nil
 local function toggleVSync()
-  if not (shoveProfiler.state.isOverlayVisible or shoveProfiler.state.isFpsOverlayVisible) then
+  if shoveProfiler.state.overlayMode == "none" then
     return
   end
 
@@ -582,25 +676,12 @@ local function toggleVSync()
   love.window.setVSync(shoveProfiler.state.isVsyncEnabled)
 end
 
---- Toggle layer batching on/off
----@return nil
-local function toggleBatching()
-  if not shoveProfiler.state.isOverlayVisible then return end
-  if not shoveProfiler.shove or not shoveProfiler.shove.setLayerBatching then return end
-
-  local currentState = shoveProfiler.shove.getLayerBatching()
-  shoveProfiler.shove.setLayerBatching(not currentState)
-
-  -- Force metrics collection to update display
-  love.event.push("shove_collect_metrics")
-end
-
 --- Checks if a touch position is on the panel border
 ---@param x number Touch x-coordinate
 ---@param y number Touch y-coordinate
 ---@return boolean isOnBorder True if touch is on the panel border
 local function isTouchOnPanelBorder(x, y)
-  if not shoveProfiler.state.isOverlayVisible then return false end
+  if shoveProfiler.state.overlayMode ~= "full" then return false end
   if type(x) ~= "number" or type(y) ~= "number" then return false end
 
   local area = shoveProfiler.input.touch.overlayArea
@@ -665,7 +746,7 @@ function shoveProfiler.gamepadpressed(joystick, button)
   -- Toggle overlay with Select + A/Cross
   if (button == "back" and joystick:isGamepadDown("a")) or
      (button == "a" and joystick:isGamepadDown("back")) then
-     toggleOverlay()
+     toggleOverlay("full")
   end
   -- Toggle VSync with Select + B/Circle
   if (button == "back" and joystick:isGamepadDown("b")) or
@@ -677,15 +758,10 @@ function shoveProfiler.gamepadpressed(joystick, button)
      (button == "y" and joystick:isGamepadDown("back")) then
     toggleSizePreset()
   end
-  -- Toggle batching with Select + X/Square when overlay is visible
-  -- Toggle FPS overlay with Select + X/Square when overlay is not visible
+  -- Toggle FPS overlay with Select + X/Square
   if (button == "back" and joystick:isGamepadDown("x")) or
      (button == "x" and joystick:isGamepadDown("back")) then
-    if shoveProfiler.state.isOverlayVisible then
-      toggleBatching()
-    else
-      toggleFpsOverlay()
-    end
+      toggleOverlay("fps")
   end
 end
 
@@ -701,13 +777,13 @@ function shoveProfiler.keypressed(key)
   if (love.keyboard.isDown("lctrl") or love.keyboard.isDown("rctrl") or
       love.keyboard.isDown("lgui") or love.keyboard.isDown("rgui")) and
      key == "p" then
-    toggleOverlay()
+    toggleOverlay("full")
   end
   -- Toggle FPS overlay with Ctrl+t or Cmd+t
   if (love.keyboard.isDown("lctrl") or love.keyboard.isDown("rctrl") or
       love.keyboard.isDown("lgui") or love.keyboard.isDown("rgui")) and
      key == "t" then
-    toggleFpsOverlay()
+    toggleOverlay("fps")
   end
   -- Toggle VSync with Ctrl+V or Cmd+V
   if (love.keyboard.isDown("lctrl") or love.keyboard.isDown("rctrl") or
@@ -720,12 +796,6 @@ function shoveProfiler.keypressed(key)
       love.keyboard.isDown("lgui") or love.keyboard.isDown("rgui")) and
      key == "s" then
     toggleSizePreset()
-  end
-  -- Toggle batching with Ctrl+B or Cmd+B
-  if (love.keyboard.isDown("lctrl") or love.keyboard.isDown("rctrl") or
-      love.keyboard.isDown("lgui") or love.keyboard.isDown("rgui")) and
-     key == "b" then
-    toggleBatching()
   end
 end
 
@@ -761,7 +831,7 @@ function shoveProfiler.touchpressed(id, x, y)
   -- Handle other touch interactions
   local timeSinceLastTap = currentTime - shoveProfiler.input.touch.lastTapTime
 
-  if shoveProfiler.state.isOverlayVisible and isTouchInsideOverlay(x, y) then
+  if shoveProfiler.state.overlayMode == "full" and isTouchInsideOverlay(x, y) then
     -- Handle touches inside the active overlay
     if timeSinceLastTap <= shoveProfiler.input.touch.doubleTapThreshold then
       toggleVSync()
@@ -774,7 +844,7 @@ function shoveProfiler.touchpressed(id, x, y)
     if currentTime - shoveProfiler.input.touch.lastCornerTapTime <= shoveProfiler.input.touch.tripleTapThreshold then
       shoveProfiler.input.touch.cornerTaps = shoveProfiler.input.touch.cornerTaps + 1
       if shoveProfiler.input.touch.cornerTaps >= 3 then
-        toggleFpsOverlay()
+        toggleOverlay("fps")
         shoveProfiler.input.touch.cornerTaps = 0
         shoveProfiler.input.touch.lastCornerTapTime = 0
       else
@@ -786,9 +856,9 @@ function shoveProfiler.touchpressed(id, x, y)
       shoveProfiler.input.touch.lastCornerTapTime = currentTime
     end
 
-    -- Toggle overlay with double-tap in corner (separate from triple tap)
+    -- Toggle full overlay with double-tap in corner (separate from triple tap)
     if timeSinceLastTap <= shoveProfiler.input.touch.doubleTapThreshold then
-      toggleOverlay()
+      toggleOverlay("full")
       shoveProfiler.input.touch.lastTapTime = 0
     else
       shoveProfiler.input.touch.lastTapTime = currentTime

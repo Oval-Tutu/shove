@@ -13,8 +13,8 @@
 ---@field offset_x number Horizontal offset for centering
 ---@field offset_y number Vertical offset for centering
 ---@field layers ShoveLayerSystem Layer management system
----@field maskShader love.Shader Shader used for layer masking
----@field resizeCallback function Callback function for window resize
+---@field maskShader love.Shader|nil Shader used for layer masking
+---@field resizeCallback function|nil Callback function for window resize
 ---@field inDrawMode boolean Whether we're currently in drawing mode
 ---@field specialLayerUsage table Tracking for special layer usage
 ---@field useSafeArea boolean Use mobile safe area for screen resolution
@@ -67,13 +67,8 @@ local state = {
   resizeCallback = nil,
   -- Tracking for special layer usage during frame rendering
   specialLayerUsage = {
-    compositeSwitches = 0,  -- How many times the composite layer was used
-    effectBufferSwitches = 0,       -- How many times the temp layer was used
-    effectsApplied = 0,      -- How many effect applications occurred
-    batchGroups = 0,        -- Number of batch groups processed
-    batchedLayers = 0,      -- Total number of layers processed in batches
-    stateChanges = 0,        -- Number of rendering state changes
-    batchedEffectOperations = 0  -- How many effect operations were batched together
+    compositeSwitches = 0,    -- How many times the composite layer was used
+    effectsApplied = 0,       -- How many effect applications occurred
   },
   -- Whether to use batch processing for similar layers
   enableBatching = true,
@@ -119,9 +114,6 @@ local function createMaskShader()
   ]]
 end
 
--- Persistent tables for reuse to minimize allocations
-local sharedEffectsTable = {}
-local effectIds = {} -- For effect signature generation
 -- Canvas pools
 local canvasPools = {
   standard = {},
@@ -175,10 +167,6 @@ local function setShader(shader)
   if state.currentRenderState.shader ~= shader then
     love.graphics.setShader(shader)
     state.currentRenderState.shader = shader
-    -- Only count meaningful state changes
-    if state.inDrawMode then
-      state.specialLayerUsage.stateChanges = state.specialLayerUsage.stateChanges + 1
-    end
     return true
   end
   return false
@@ -194,10 +182,6 @@ local function setBlendMode(mode, alphaMode)
     love.graphics.setBlendMode(mode, alphaMode)
     state.currentRenderState.blendMode = mode
     state.currentRenderState.blendAlphaMode = alphaMode
-    -- Only count meaningful state changes
-    if state.inDrawMode then
-      state.specialLayerUsage.stateChanges = state.specialLayerUsage.stateChanges + 1
-    end
     return true
   end
   return false
@@ -208,24 +192,18 @@ end
 ---@param value number|nil Value to test against
 ---@return boolean changed Whether the stencil test was actually changed
 local function setStencilTest(mode, value)
-  local isNil = (mode == nil)
   local currentMode = state.currentRenderState.stencilTest
   local currentValue = state.currentRenderState.stencilValue
 
-  if (currentMode ~= mode) or (not isNil and currentValue ~= value) then
-    if isNil then
-      love.graphics.setStencilTest()
-    else
+  if (currentMode ~= mode) or (mode ~= nil and currentValue ~= value) then
+    if (mode ~= nil and value ~= nil) then
       love.graphics.setStencilTest(mode, value)
+    else
+      love.graphics.setStencilTest()
     end
 
     state.currentRenderState.stencilTest = mode
-    state.currentRenderState.stencilValue = isNil and nil or value
-
-    -- Only count meaningful state changes
-    if state.inDrawMode then
-      state.specialLayerUsage.stateChanges = state.specialLayerUsage.stateChanges + 1
-    end
+    state.currentRenderState.stencilValue = (mode == nil) and nil or value
     return true
   end
   return false
@@ -364,115 +342,6 @@ local function createCompositeLayer()
   return composite
 end
 
---- Get a unique ID for a shader effect
----@param effect love.Shader The shader effect
----@return number id The unique ID for this shader
-local function getShaderID(effect)
-  if not effect then return 0 end
-
-  -- If shader is already registered, return its ID
-  if state.shaderRegistry.shaders[effect] then
-    return state.shaderRegistry.shaders[effect]
-  end
-
-  -- Otherwise, assign a new ID
-  local id = state.shaderRegistry.nextId
-  state.shaderRegistry.shaders[effect] = id
-  state.shaderRegistry.nextId = id + 1
-
-  return id
-end
-
--- Add blend mode identifier (map to numbers 1-8)
-local blendModeIds = {
-  alpha = 1, replace = 2, screen = 3, add = 4,
-  subtract = 5, multiply = 6, lighten = 7, darken = 8
-}
-
---- Generate a signature hash for a layer based on its properties
----@param layer ShoveLayer Layer to generate signature for
----@return number signature A numeric hash representing the layer's key properties
-local function getLayerSignature(layer)
-  if not layer then return 0 end
-
-  -- Use cached signature if available
-  if not layer._effectsHashDirty and layer._effectsHash then
-    return layer._effectsHash
-  end
-
-  -- Build base signature directly (using multiplication instead of bit shifts)
-  local signature = (blendModeIds[layer.blendMode] or 1) * 4
-  if layer.maskLayer then signature = signature + 2 end
-  if layer.isUsedAsMask then signature = signature + 1 end
-
-  -- For layers with no effects, this is the complete signature
-  if #layer.effects == 0 then
-    layer._effectsHash = signature
-    layer._effectsHashDirty = false
-    return signature
-  end
-
-  -- For single effect layers, just add the shader ID
-  if #layer.effects == 1 then
-    signature = signature + getShaderID(layer.effects[1]) * 8
-    layer._effectsHash = signature
-    layer._effectsHashDirty = false
-    return signature
-  end
-
-  -- For multiple effects, use a faster hashing approach
-  local hash = signature
-  for i = 1, #layer.effects do
-    -- Use simple prime number hashing as alternative to XOR
-    hash = (hash * 31 + getShaderID(layer.effects[i]) * (i * 13)) % 2147483647
-  end
-
-  layer._effectsHash = hash
-  layer._effectsHashDirty = false
-  return hash
-end
-
--- Persistent table to avoid allocations in the hot loop
-local persistentGroups = {}
-
---- Group layers by their rendering properties
----@param layers ShoveLayer[] Array of layers to group
----@return table groups Table of layer groups indexed by signature
-local function groupLayersByProperties(layers)
-  -- Clear existing groups for reuse
-  for k in pairs(persistentGroups) do persistentGroups[k] = nil end
-
-  for _, layer in ipairs(layers) do
-    -- Skip layers that are being used as masks - they shouldn't be composited
-    if layer.visible and not layer.isSpecial and not layer.isUsedAsMask and layer.canvas then
-      local signature = getLayerSignature(layer)
-
-      if not persistentGroups[signature] then
-        persistentGroups[signature] = {
-          signature = signature,
-          layers = {},
-          blendMode = layer.blendMode,
-          hasMask = layer.maskLayer ~= nil,
-          effects = layer.effects,
-          effectsCount = #layer.effects,
-          -- Track minimum z-index for each group
-          minZIndex = layer.zIndex
-        }
-      else
-        -- Maintain the minimum z-index of all layers in this group
-        persistentGroups[signature].minZIndex = math.min(
-          persistentGroups[signature].minZIndex,
-          layer.zIndex
-        )
-      end
-
-      table.insert(persistentGroups[signature].layers, layer)
-    end
-  end
-
-  return persistentGroups
-end
-
 --- Apply a set of shader effects to a canvas
 ---@param canvas love.Canvas Canvas to apply effects to
 ---@param effects love.Shader[] Array of shader effects
@@ -482,67 +351,69 @@ local function applyEffects(canvas, effects)
     return
   end
 
+  -- Optimization: For single effects, apply directly
   if #effects == 1 then
     setShader(effects[1])
     love.graphics.draw(canvas)
-    state.specialLayerUsage.effectsApplied = state.specialLayerUsage.effectsApplied + 1
-  else
-    local _canvas = love.graphics.getCanvas()
-
-    -- Ensure effect buffers exist and are correct size
-    if not fxCanvasA or fxCanvasA:getWidth() ~= state.viewport_width then
-      fxCanvasA = fxCanvasA or love.graphics.newCanvas(state.viewport_width, state.viewport_height)
-      fxCanvasB = fxCanvasB or love.graphics.newCanvas(state.viewport_width, state.viewport_height)
-
-      if fxCanvasA:getWidth() ~= state.viewport_width then
-        fxCanvasA:release()
-        fxCanvasB:release()
-        fxCanvasA = love.graphics.newCanvas(state.viewport_width, state.viewport_height)
-        fxCanvasB = love.graphics.newCanvas(state.viewport_width, state.viewport_height)
-      end
-    end
-
-    -- Track effects buffer switching
-    state.specialLayerUsage.effectBufferSwitches = state.specialLayerUsage.effectBufferSwitches + 1
-
-    -- Only push/pop once
-    love.graphics.push()
-    love.graphics.origin()
-
-    -- Copy initial contents to first buffer
-    love.graphics.setCanvas(fxCanvasA)
-    love.graphics.clear()
-    setShader(nil) -- Use default shader for the initial copy
-    love.graphics.draw(canvas)
-
-    local input = fxCanvasA
-    local output = fxCanvasB
-
-    -- Apply effects in sequence
-    for i = 1, #effects do
-      love.graphics.setCanvas(output)
-      love.graphics.clear()
-      setShader(effects[i])
-      love.graphics.draw(input)
-
-      -- Swap buffers for next pass
-      local temp = input
-      input = output
-      output = temp
-
-      state.specialLayerUsage.effectsApplied = state.specialLayerUsage.effectsApplied + 1
-    end
-
-    -- NOTE! Restore coordinate system BEFORE final drawing
-    love.graphics.setCanvas(_canvas)
     setShader(nil)
-    -- First restore the coordinate system
-    love.graphics.pop()
-    -- Then draw with proper transforms
-    love.graphics.draw(input)
+    state.specialLayerUsage.effectsApplied = state.specialLayerUsage.effectsApplied + 1
+    return
   end
 
-  setShader(nil)
+  -- For multiple effects, we need to chain them using swap buffers
+  -- Create or reuse effect buffers as needed
+  local fxCanvasA = shove._fxCanvasA
+  local fxCanvasB = shove._fxCanvasB
+
+  -- Ensure buffers exist and are correct size
+  if not fxCanvasA or fxCanvasA:getWidth() ~= state.viewport_width then
+    if fxCanvasA then fxCanvasA:release() end
+    if fxCanvasB then fxCanvasB:release() end
+
+    fxCanvasA = love.graphics.newCanvas(state.viewport_width, state.viewport_height)
+    fxCanvasB = love.graphics.newCanvas(state.viewport_width, state.viewport_height)
+
+    -- Store for reuse
+    shove._fxCanvasA = fxCanvasA
+    shove._fxCanvasB = fxCanvasB
+  end
+
+  local _canvas = love.graphics.getCanvas()
+
+  -- Save state
+  love.graphics.push()
+  love.graphics.origin()
+
+  -- Copy original content to first buffer
+  love.graphics.setCanvas(fxCanvasA)
+  love.graphics.clear()
+  love.graphics.draw(canvas)
+
+  local input = fxCanvasA
+  local output = fxCanvasB
+
+  -- Apply effects in sequence (each building on previous result)
+  for i = 1, #effects do
+    love.graphics.setCanvas(output)
+    love.graphics.clear()
+    setShader(effects[i])
+    love.graphics.draw(input)
+    setShader(nil)
+
+    -- Swap buffers for next pass
+    local temp = input
+    input = output
+    output = temp
+
+    state.specialLayerUsage.effectsApplied = state.specialLayerUsage.effectsApplied + 1
+  end
+
+  -- Restore original canvas and state
+  love.graphics.setCanvas(_canvas)
+  love.graphics.pop()
+
+  -- Draw final result
+  love.graphics.draw(input)
 end
 
 --- Begin drawing to a specific layer
@@ -616,162 +487,6 @@ local function endLayerDraw()
   return false
 end
 
--- Helper function to convert layer groups hash to sorted array
-local function getSortedLayerGroups(groupsHash)
-  local groupsArray = {}
-
-  -- Convert hash to array
-  for _, group in pairs(groupsHash) do
-    table.insert(groupsArray, group)
-  end
-
-  -- Sort by minZIndex to preserve z-order between groups
-  table.sort(groupsArray, function(a, b)
-    return a.minZIndex < b.minZIndex
-  end)
-
-  return groupsArray
-end
-
--- Temporary canvas for batched effect processing
-local batchCanvas = nil
-
---- Draw a batch of layers with similar properties
----@param layerGroup table Group of layers with similar properties
-local function drawLayerBatch(layerGroup)
-  if not layerGroup or #layerGroup.layers == 0 then return end
-
-  local layerCount = #layerGroup.layers
-
-  -- Fast path for single layers
-  if layerCount == 1 then
-    local layer = layerGroup.layers[1]
-    setBlendMode(layer.blendMode, "premultiplied")
-
-    -- Apply mask if needed
-    if layer.maskLayer and layer.maskLayerRef and layer.maskLayerRef.canvas then
-      love.graphics.clear(false, false, true)
-      love.graphics.stencil(function()
-        setShader(state.maskShader)
-        love.graphics.draw(layer.maskLayerRef.canvas)
-        setShader(nil)
-      end, "replace", 1)
-      setStencilTest("equal", 1)
-    end
-
-    -- Draw the layer with effects
-    applyEffects(layer.canvas, layer.effects)
-
-    -- Reset stencil if used
-    if layer.maskLayer then
-      setStencilTest(nil)
-    end
-    return
-  end
-
-  -- For layers without masks and effects, draw them directly
-  if not layerGroup.hasMask and layerGroup.effectsCount == 0 then
-    for _, layer in ipairs(layerGroup.layers) do
-      setBlendMode(layer.blendMode, "premultiplied")
-      love.graphics.draw(layer.canvas)
-    end
-
-    -- Count as a batch
-    state.specialLayerUsage.batchGroups = state.specialLayerUsage.batchGroups + 1
-    state.specialLayerUsage.batchedLayers = state.specialLayerUsage.batchedLayers + #layerGroup.layers
-    return
-  end
-
-  -- Create or update batch canvas if needed for effect batching
-  if not batchCanvas or batchCanvas:getWidth() ~= state.viewport_width or batchCanvas:getHeight() ~= state.viewport_height then
-    if batchCanvas then batchCanvas:release() end
-    batchCanvas = love.graphics.newCanvas(state.viewport_width, state.viewport_height)
-  end
-
-  -- Group layers by mask
-  local maskGroups = {}
-  for _, layer in ipairs(layerGroup.layers) do
-    local maskKey = layer.maskLayer or "none"
-    maskGroups[maskKey] = maskGroups[maskKey] or {}
-    table.insert(maskGroups[maskKey], layer)
-  end
-
-  -- Process each mask group
-  for maskName, layers in pairs(maskGroups) do
-    -- Set up mask once if needed
-    if maskName ~= "none" then
-      local maskLayer = getLayer(maskName)
-      if maskLayer and maskLayer.canvas then
-        love.graphics.clear(false, false, true)
-        love.graphics.stencil(function()
-          setShader(state.maskShader)
-          love.graphics.draw(maskLayer.canvas)
-          setShader(nil)
-        end, "replace", 1)
-        setStencilTest("equal", 1)
-      end
-    end
-
-    -- Within each mask group, group by effect signature for further batching
-    local effectGroups = {}
-    for _, layer in ipairs(layers) do
-      local signature = getLayerSignature(layer)
-      effectGroups[signature] = effectGroups[signature] or {
-        layers = {},
-        effects = layer.effects,
-        effectsCount = #layer.effects,
-        blendMode = layer.blendMode
-      }
-      table.insert(effectGroups[signature].layers, layer)
-    end
-
-    -- Process each effect group within this mask group
-    for _, effectGroup in pairs(effectGroups) do
-      -- Set blend mode for the group
-      setBlendMode(effectGroup.blendMode, "premultiplied")
-
-      -- For layers with identical effects AND multiple layers, batch process them
-      if effectGroup.effectsCount > 0 and #effectGroup.layers > 1 then
-        -- Store current canvas
-        local currentCanvas = love.graphics.getCanvas()
-
-        -- Draw all layers to batch canvas
-        love.graphics.setCanvas(batchCanvas)
-        love.graphics.clear()
-
-        for _, layer in ipairs(effectGroup.layers) do
-          love.graphics.draw(layer.canvas)
-        end
-
-        -- Restore original canvas
-        love.graphics.setCanvas(currentCanvas)
-
-        -- Apply effects once to the combined batch
-        applyEffects(batchCanvas, effectGroup.effects)
-
-        -- Count batched effect operations
-        state.specialLayerUsage.batchedEffectOperations =
-          state.specialLayerUsage.batchedEffectOperations +
-          (#effectGroup.layers - 1) * effectGroup.effectsCount
-      else
-        -- For single layers or layers with unique effects, process individually
-        for _, layer in ipairs(effectGroup.layers) do
-          applyEffects(layer.canvas, layer.effects)
-        end
-      end
-    end
-
-    -- Reset stencil only once after processing all layers with this mask
-    if maskName ~= "none" then
-      setStencilTest(nil)
-    end
-  end
-
-  -- Count as a batch
-  state.specialLayerUsage.batchGroups = state.specialLayerUsage.batchGroups + 1
-  state.specialLayerUsage.batchedLayers = state.specialLayerUsage.batchedLayers + #layerGroup.layers
-end
-
 --- Composite all layers to screen
 ---@param globalEffects love.Shader[]|nil Optional effects to apply globally
 ---@param applyPersistentEffects boolean Whether to apply persistent global effects
@@ -833,92 +548,40 @@ local function compositeLayersOnScreen(globalEffects, applyPersistentEffects)
   love.graphics.setCanvas({ state.layers.composite.canvas, stencil = anyActiveMasks })
   love.graphics.clear()
 
-  if state.enableBatching then
-    -- Group layers, but process them in strict z-index order
-    -- First, create a temporary table of all visible, non-mask layers with canvases
-    local visibleLayers = {}
-    for _, layer in ipairs(orderedLayers) do
-      if layer.visible and not layer.isSpecial and not layer.isUsedAsMask and layer.canvas then
-        table.insert(visibleLayers, layer)
-      end
-    end
-
-    -- Sort by z-index to ensure predictable drawing order
-    table.sort(visibleLayers, function(a, b)
-      return a.zIndex < b.zIndex
-    end)
-
-    -- Process each layer individually, but use the signature for batching
-    local lastSignature = ""
-    local currentBatch = nil
-
-    for _, layer in ipairs(visibleLayers) do
-      local signature = getLayerSignature(layer)
-
-      -- Different signature means we need to start a new batch
-      if signature ~= lastSignature then
-        -- Process previous batch if it exists
-        if currentBatch and #currentBatch.layers > 0 then
-          drawLayerBatch(currentBatch)
+  -- Traditional layer-by-layer processing
+  for _, layer in ipairs(orderedLayers) do
+    -- Skip layers that are being used as masks - they shouldn't be composited
+    if layer.visible and not layer.isSpecial and not layer.isUsedAsMask then
+      -- Skip layers without canvas (never drawn to)
+      if layer.canvas then  -- Only process layers that have a canvas
+        -- Apply mask if needed
+        if layer.maskLayer then
+          -- Use the direct reference instead of looking up by name
+          local maskLayer = layer.maskLayerRef
+          if maskLayer and maskLayer.canvas then
+            -- Clear stencil buffer first
+            love.graphics.clear(false, false, true)
+            love.graphics.stencil(function()
+              -- Use mask shader to properly handle transparent pixels
+              setShader(state.maskShader)
+              love.graphics.draw(maskLayer.canvas)
+              setShader(nil)
+            end, "replace", 1)
+            -- Only draw where stencil value equals 1
+            setStencilTest("equal", 1)
+          end
         end
 
-        -- Start a new batch
-        currentBatch = {
-          signature = signature,
-          layers = {},
-          blendMode = layer.blendMode,
-            hasMask = layer.maskLayer ~= nil,
-            effects = layer.effects,
-          effectsCount = #layer.effects,
-          minZIndex = layer.zIndex
-        }
-        lastSignature = signature
-      end
+        -- Use premultiplied alpha when drawing canvases
+        -- But respect the layer's blend mode
+        setBlendMode(layer.blendMode, "premultiplied")
 
-      -- Add layer to current batch
-      table.insert(currentBatch.layers, layer)
-    end
+        -- Apply effects (or draw directly if no effects)
+        applyEffects(layer.canvas, layer.effects)
 
-    -- Process final batch if it exists
-    if currentBatch and #currentBatch.layers > 0 then
-      drawLayerBatch(currentBatch)
-    end
-  else
-    -- Traditional layer-by-layer processing
-    for _, layer in ipairs(orderedLayers) do
-      -- Skip layers that are being used as masks - they shouldn't be composited
-      if layer.visible and not layer.isSpecial and not layer.isUsedAsMask then
-        -- Skip layers without canvas (never drawn to)
-        if layer.canvas then  -- Only process layers that have a canvas
-          -- Apply mask if needed
-          if layer.maskLayer then
-            -- Use the direct reference instead of looking up by name
-            local maskLayer = layer.maskLayerRef
-            if maskLayer and maskLayer.canvas then
-              -- Clear stencil buffer first
-              love.graphics.clear(false, false, true)
-              love.graphics.stencil(function()
-                -- Use mask shader to properly handle transparent pixels
-                setShader(state.maskShader)
-                love.graphics.draw(maskLayer.canvas)
-                setShader(nil)
-              end, "replace", 1)
-              -- Only draw where stencil value equals 1
-              setStencilTest("equal", 1)
-            end
-          end
-
-          -- Use premultiplied alpha when drawing canvases
-          -- But respect the layer's blend mode
-          setBlendMode(layer.blendMode, "premultiplied")
-
-          -- Apply effects (or draw directly if no effects)
-          applyEffects(layer.canvas, layer.effects)
-
-          -- Reset stencil if used
-          if layer.maskLayer then
-            setStencilTest(nil)
-          end
+        -- Reset stencil if used
+        if layer.maskLayer then
+          setStencilTest(nil)
         end
       end
     end
@@ -935,10 +598,8 @@ local function compositeLayersOnScreen(globalEffects, applyPersistentEffects)
   love.graphics.push()
   love.graphics.scale(state.scale_x, state.scale_y)
 
-  -- Clear shared effects table instead of creating a new one
-  for k in pairs(sharedEffectsTable) do
-    sharedEffectsTable[k] = nil
-  end
+  -- Create shared effects
+  local sharedEffectsTable = {}
 
   -- Only apply persistent global effects when requested
   if applyPersistentEffects then
@@ -977,14 +638,7 @@ end
 ---@return boolean success Whether the effect was added
 local function addEffect(layer, effect)
   if layer and effect then
-    -- Register the shader if not already registered
-    if not state.shaderRegistry.shaders[effect] then
-      state.shaderRegistry.shaders[effect] = state.shaderRegistry.nextId
-      state.shaderRegistry.nextId = state.shaderRegistry.nextId + 1
-    end
-
     table.insert(layer.effects, effect)
-    layer._effectsHashDirty = true
     return true
   end
   return false
@@ -1000,7 +654,6 @@ local function removeEffect(layer, effect)
   for i, e in ipairs(layer.effects) do
     if e == effect then
       table.remove(layer.effects, i)
-      layer._effectsHashDirty = true
       return true
     end
   end
@@ -1014,7 +667,6 @@ end
 local function clearEffects(layer)
   if layer then
     layer.effects = {}
-    layer._effectsHashDirty = true
     return true
   end
   return false
@@ -1026,8 +678,8 @@ local shove = {
   _VERSION = {
     major = 1,
     minor = 0,
-    patch = 6,
-    string = "1.0.6"
+    patch = 7,
+    string = "1.0.7"
   },
   --- Blend mode constants
   BLEND = {
@@ -1221,7 +873,7 @@ local shove = {
       error("shove.updateWindowMode: flags must be a table or nil", 2)
     end
 
-    local success, message = love.window.updateWindowMode(width, height, flags)
+    local success, message = love.window.setMode(width, height, flags)
 
     if success then
       -- Get the actual dimensions (might differ from requested)
@@ -1247,12 +899,7 @@ local shove = {
 
     -- Reset special layer usage counters at the start of each frame
     state.specialLayerUsage.compositeSwitches = 0
-    state.specialLayerUsage.effectBufferSwitches = 0
     state.specialLayerUsage.effectsApplied = 0
-    state.specialLayerUsage.batchGroups = 0
-    state.specialLayerUsage.batchedLayers = 0
-    state.specialLayerUsage.stateChanges = 0
-    state.specialLayerUsage.batchedEffectOperations = 0
     state.currentRenderState.shader = nil         -- Reset shader tracking
     state.currentRenderState.blendMode = nil      -- Reset blend mode tracking
     state.currentRenderState.blendAlphaMode = nil -- Reset alpha mode tracking
@@ -1768,9 +1415,6 @@ local shove = {
       layer.stencil = false
     end
 
-    -- Mark the layer's effect signature as dirty since mask status affects grouping
-    layer._effectsHashDirty = true
-
     return true
   end,
 
@@ -2228,30 +1872,27 @@ local shove = {
     return true
   end,
 
-  --- Enable or disable batch processing for similar layers
-  ---@param enable boolean Whether to enable batch processing
-  ---@return boolean previous Previous batching state
-  setLayerBatching = function(enable)
-    if type(enable) ~= "boolean" then
-      error("shove.setLayerBatching: enable must be a boolean", 2)
-    end
-
-    local previous = state.enableBatching
-    state.enableBatching = enable
-    return previous
-  end,
-
-  --- Get current batch processing state
-  ---@return boolean enabled Whether batch processing is enabled
-  getLayerBatching = function()
-    return state.enableBatching
-  end,
-
   --- Return a copy of relevant state data for profiler metrics
   getState = function()
-    -- Initialize complete table structure once
+    -- Initialize cache if it doesn't exist
     if not shove._stateCache then
+      -- Create the cache structure once
       shove._stateCache = {
+        -- Basic state information
+        fitMethod = state.fitMethod,
+        renderMode = state.renderMode,
+        scalingFilter = state.scalingFilter,
+        screen_width = state.screen_width,
+        screen_height = state.screen_height,
+        viewport_width = state.viewport_width,
+        viewport_height = state.viewport_height,
+        rendered_width = state.rendered_width,
+        rendered_height = state.rendered_height,
+        scale_x = state.scale_x,
+        scale_y = state.scale_y,
+        offset_x = state.offset_x,
+        offset_y = state.offset_y,
+        -- Layer summary data
         layers = {
           ordered = {},
           count = 0,
@@ -2260,38 +1901,19 @@ local shove = {
           special_layer_count = 0,
           active = nil
         },
+        -- Special layer usage
         specialLayerUsage = {
           compositeSwitches = 0,
-          effectBufferSwitches = 0,
           effectsApplied = 0,
-          batchGroups = 0,
-          batchedLayers = 0,
-          stateChanges = 0,
-          batchedEffectOperations = 0
         },
-        global_effects_count = 0,
-        -- Pre-initialize all scalar properties
-        fitMethod = "",
-        renderMode = "",
-        scalingFilter = "",
-        screen_width = 0,
-        screen_height = 0,
-        viewport_width = 0,
-        viewport_height = 0,
-        rendered_width = 0,
-        rendered_height = 0,
-        scale_x = 0,
-        scale_y = 0,
-        offset_x = 0,
-        offset_y = 0
+        -- Global effects
+        global_effects_count = 0
       }
-      shove._layerInfoCache = {}
     end
 
     local result = shove._stateCache
-    local persistentLayerInfo = shove._layerInfoCache
 
-    -- Update basic state variables (always needed)
+    -- Update basic state information (always changes)
     result.fitMethod = state.fitMethod
     result.renderMode = state.renderMode
     result.scalingFilter = state.scalingFilter
@@ -2306,114 +1928,82 @@ local shove = {
     result.offset_x = state.offset_x
     result.offset_y = state.offset_y
 
-    -- Calculate global effects count if composite layer exists
-    local globalEffectsCount = 0
+    -- Calculate global effects count
     if state.layers.composite and state.layers.composite.effects then
-      globalEffectsCount = #state.layers.composite.effects
+      result.global_effects_count = #state.layers.composite.effects
+    else
+      result.global_effects_count = 0
     end
-    result.global_effects_count = globalEffectsCount
 
-    -- Only compute layer info if in layer render mode
+    -- Only process layer data in layer render mode
     if state.renderMode == "layer" then
-      local layers = result.layers
       local orderedLayers = state.layers.ordered
       local layerCount = #orderedLayers
 
-      -- Track counts in a single pass
-      local canvasCount, maskCount, specialLayerCount = 0, 0, 0
+      -- Reset counters
+      result.layers.count = layerCount
+      result.layers.canvas_count = 0
+      result.layers.mask_count = 0
+      result.layers.special_layer_count = 0
 
-      -- Use the pre-created ordered array
-      local orderedLayerInfo = layers.ordered
-
-      -- Process layers
+      -- Process layers and collect metrics
       for i = 1, layerCount do
         local layer = orderedLayers[i]
 
-        -- Count special counters
-        if layer.canvas ~= nil then canvasCount = canvasCount + 1 end
-        if layer.isUsedAsMask then maskCount = maskCount + 1 end
-        if layer.isSpecial then specialLayerCount = specialLayerCount + 1 end
-
-        -- Ensure the layerInfo table exists for this index
-        if not persistentLayerInfo[i] then
-          persistentLayerInfo[i] = {
-            name = "",
-            zIndex = 0,
-            visible = false,
-            blendMode = "",
-            blendAlphaMode = "",
-            hasCanvas = false,
-            isSpecial = false,
-            effects = 0,
-            isUsedAsMask = false
-          }
+        -- Count special properties
+        if layer.canvas ~= nil then
+          result.layers.canvas_count = result.layers.canvas_count + 1
+        end
+        if layer.isUsedAsMask then
+          result.layers.mask_count = result.layers.mask_count + 1
+        end
+        if layer.isSpecial then
+          result.layers.special_layer_count = result.layers.special_layer_count + 1
         end
 
-        local layerInfo = persistentLayerInfo[i]
+        -- Reuse or create layer info object
+        if not result.layers.ordered[i] then
+          result.layers.ordered[i] = {}
+        end
 
-        -- Update layer info (only what's needed for debug)
+        -- Update layer info
+        local layerInfo = result.layers.ordered[i]
         layerInfo.name = layer.name
         layerInfo.zIndex = layer.zIndex
         layerInfo.visible = layer.visible
-        layerInfo.blendMode = layer.blendMode
-        layerInfo.blendAlphaMode = layer.blendAlphaMode
         layerInfo.hasCanvas = layer.canvas ~= nil
         layerInfo.isSpecial = layer.isSpecial
         layerInfo.effects = #layer.effects
-        -- Include mask information for profiler display
         layerInfo.isUsedAsMask = layer.isUsedAsMask or false
-
-        -- Add to result array
-        orderedLayerInfo[i] = layerInfo
       end
 
-      -- Clean up any extra entries in both caches
-      for i = layerCount + 1, #orderedLayerInfo do
-        orderedLayerInfo[i] = nil
+      -- Clear out any extra cached layers if number of layers decreased
+      for i = layerCount + 1, #result.layers.ordered do
+        result.layers.ordered[i] = nil
       end
 
-      for i = layerCount + 1, #persistentLayerInfo do
-        persistentLayerInfo[i] = nil
-      end
+      -- Set active layer name
+      result.layers.active = state.layers.active and state.layers.active.name or nil
 
-      -- Update layer summary info
-      layers.count = layerCount
-      layers.canvas_count = canvasCount
-      layers.mask_count = maskCount
-      layers.special_layer_count = specialLayerCount
-      layers.active = state.layers.active and state.layers.active.name or nil
-
-      -- Update special layer usage
-      local usage = result.specialLayerUsage
-      usage.compositeSwitches = state.specialLayerUsage.compositeSwitches
-      usage.effectBufferSwitches = state.specialLayerUsage.effectBufferSwitches
-      usage.effectsApplied = state.specialLayerUsage.effectsApplied
-      usage.batchGroups = state.specialLayerUsage.batchGroups
-      usage.batchedLayers = state.specialLayerUsage.batchedLayers
-      usage.stateChanges = state.specialLayerUsage.stateChanges
-      usage.batchedEffectOperations = state.specialLayerUsage.batchedEffectOperations
+      -- Copy usage counters
+      result.specialLayerUsage.compositeSwitches = state.specialLayerUsage.compositeSwitches
+      result.specialLayerUsage.effectsApplied = state.specialLayerUsage.effectsApplied
     else
-      -- Just reset values without destroying tables when not in layer render mode
+      -- Reset layer data when not in layer mode
       result.layers.count = 0
       result.layers.canvas_count = 0
       result.layers.mask_count = 0
       result.layers.special_layer_count = 0
       result.layers.active = nil
 
-      -- Clear the ordered array without destroying it
+      -- Clear ordered layers array
       for i = 1, #result.layers.ordered do
         result.layers.ordered[i] = nil
       end
 
-      -- Reset usage counters without destroying the table
-      local usage = result.specialLayerUsage
-      usage.compositeSwitches = 0
-      usage.effectBufferSwitches = 0
-      usage.effectsApplied = 0
-      usage.batchGroups = 0
-      usage.batchedLayers = 0
-      usage.stateChanges = 0
-      usage.batchedEffectOperations = 0
+      -- Reset usage counters
+      result.specialLayerUsage.compositeSwitches = 0
+      result.specialLayerUsage.effectsApplied = 0
     end
 
     return result
