@@ -1656,7 +1656,7 @@ local shove = {
   ---@return number mouseX Viewport X coordinate
   ---@return number mouseY Viewport Y coordinate
   mouseToViewport = function()
-    local mouseX, mouseY = love.mouse.getPosition()
+    local mouseX, mouseY = love.mouse.getX(), love.mouse.getY()
     return shove.screenToViewport(mouseX, mouseY)
   end,
 
