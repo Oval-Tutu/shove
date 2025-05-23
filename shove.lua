@@ -1978,32 +1978,74 @@ do
     end
   end
 
-  -- Determine where shove.lua is located
-  local profilerName = "shove-profiler"
-  local shoveDir = ""
-  local pathSep = package.config:sub(1,1)
-  do
-    local info = debug.getinfo(1, "S")
-    if info and info.source and info.source:sub(1, 1) == "@" then
-      local path = info.source:sub(2)
-      -- Use pattern based on OS path separator
-      local pattern = pathSep == "/"
-        and "(.+/)[^/]+%.lua$"
-        or "(.+\\)[^\\]+%.lua$"
-      shoveDir = path:match(pattern) or ""
+  -- Try to load the profiler module systematically
+  local function loadProfilerModule()
+    local profilerName = "shove-profiler"
+
+    -- First determine if we can find shove.lua's location
+    local shoveDir = ""
+    local pathSep = package.config:sub(1,1)
+    do
+      local info = debug.getinfo(1, "S")
+      if info and info.source and info.source:sub(1, 1) == "@" then
+        local path = info.source:sub(2)
+        local pattern = pathSep == "/" and "(.+/)[^/]+%.lua$" or "(.+\\)[^\\]+%.lua$"
+        shoveDir = path:match(pattern) or ""
+        print("shove: Located in directory: " .. shoveDir)
+      end
     end
+
+    -- Try direct attempt first - same directory
+    if shoveDir ~= "" then
+      print("shove: Trying " .. shoveDir .. profilerName)
+      -- Convert file path to module format (replacing / or \ with .)
+      local requirePath = (shoveDir .. profilerName):gsub(pathSep, ".")
+      local success, module = pcall(require, requirePath)
+      if success then
+        print("shove: Profiler loaded from same directory")
+        return success, module
+      end
+    end
+
+    -- Try with standard Lua module resolution
+    local success, module = pcall(require, profilerName)
+    if success then
+      print("shove: Profiler loaded via standard module resolution")
+      return success, module
+    end
+
+    -- Finally, use package.path to systematically search for the module
+    -- This uses Lua's built-in module resolution logic
+    local tried = {}
+    for path in package.path:gmatch("[^;]+") do
+      -- Replace the ? with our module name
+      local modulePath = path:gsub("?", profilerName)
+      -- Convert the file path pattern to a require pattern
+      local requirePattern = modulePath:match("(.+)%.lua$")
+      if requirePattern then
+        -- Skip paths we've already tried
+        if not tried[requirePattern] then
+          tried[requirePattern] = true
+          -- Convert file path separators to dots for require
+          requirePattern = requirePattern:gsub("[/\\]", ".")
+          print("shove: Trying " .. requirePattern)
+          local success, module = pcall(require, requirePattern)
+          if success then
+            print("shove: Profiler loaded from " .. requirePattern)
+            return success, module
+          end
+        end
+      end
+    end
+
+    -- If we get here, we couldn't find the module
+    local lastError = "Module not found in any standard location"
+    return false, lastError
   end
 
-  -- Build path with correct separator
-  local profilerPath = shoveDir .. profilerName
-  local requirePath = profilerPath:gsub(pathSep, ".")
+  -- Load profiler or create stub
+  local success, shoveProfiler = loadProfilerModule()
 
-  -- Load profiler module or create a stub module
-  local success, shoveProfiler = pcall(require, requirePath)
-  if not success then
-    print("shove: Profiler module failed to load from: ", shoveProfiler)
-    success, shoveProfiler = pcall(require, profilerName)
-  end
   if success then
     shove.profiler = shoveProfiler
     shove.profiler.init(shove)
