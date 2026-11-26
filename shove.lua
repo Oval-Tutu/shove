@@ -870,6 +870,7 @@ local shove = {
 
     -- Set flag to indicate we're in drawing mode
     state.inDrawMode = true
+    state.canvasState.externalCanvasActive = false
 
     -- Save color state
     state.savedColor = { love.graphics.getColor() }
@@ -889,22 +890,45 @@ local shove = {
         return state.canvasState.originalSetCanvas(...)
       end
     elseif state.renderMode == "direct" then
+      local function isCanvas(val)
+        return type(val) == "userdata" and type(val.typeOf) == "function" and val:typeOf("Canvas")
+      end
+      local function tableTargetsCanvas(tbl)
+        local firstTarget = rawget(tbl, 1)
+        if isCanvas(firstTarget) then
+          return true
+        end
+        if type(firstTarget) == "table" and isCanvas(rawget(firstTarget, 1)) then
+          return true
+        end
+        return isCanvas(rawget(tbl, "depthstencil"))
+      end
       state.canvasState.originalSetCanvas = love.graphics.setCanvas
       love.graphics.setCanvas = function(...)
-        local args = {...}
-        if #args > 0 and type(args[1]) == "userdata" and args[1]:typeOf("Canvas") then
-          -- User is switching to their own canvas: reset transform/scissor
-          love.graphics.push()
+        local firstArg = select(1, ...)
+        local targetsCanvas = isCanvas(firstArg) or (type(firstArg) == "table" and tableTargetsCanvas(firstArg))
+
+        local result = state.canvasState.originalSetCanvas(...)
+        if targetsCanvas then
+          -- User is switching to their own canvas: reset transform/scissor once
+          if not state.canvasState.externalCanvasActive then
+            love.graphics.push()
+            state.canvasState.externalCanvasActive = true
+          end
           love.graphics.origin()
           love.graphics.setScissor()
-          local result = state.canvasState.originalSetCanvas(...)
-          return result
-        else
+        elseif state.canvasState.externalCanvasActive then
           -- Switching back to default framebuffer: restore Shöve's transform/scissor
-          local result = state.canvasState.originalSetCanvas(...)
           love.graphics.pop()
-          return result
+          love.graphics.setScissor(
+            state.offset_x,
+            state.offset_y,
+            state.viewport_width * state.scale_x,
+            state.viewport_height * state.scale_y
+          )
+          state.canvasState.externalCanvasActive = false
         end
+        return result
       end
     end
 
@@ -1011,6 +1035,11 @@ local shove = {
       setShader(nil)
       setStencilTest(nil)
     else
+      if state.canvasState.externalCanvasActive then
+        love.graphics.setCanvas()
+        love.graphics.pop()
+        state.canvasState.externalCanvasActive = false
+      end
       love.graphics.pop()
       love.graphics.setScissor()
     end
